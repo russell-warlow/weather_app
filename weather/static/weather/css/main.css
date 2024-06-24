@@ -1,0 +1,6 @@
+.forecast {
+  display: grid;
+  grid-template-columns: 150px;
+  grid-template-rows: 150px;
+
+}

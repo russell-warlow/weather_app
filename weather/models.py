@@ -45,7 +45,7 @@ class Forecast(models.Model):
     wind_speed = models.CharField(max_length=20)
     wind_direction = models.CharField(max_length=5)
     precip_chance = models.IntegerField(null=True)
-    relative_humidity = models.IntegerField()
+    relative_humidity = models.IntegerField(null=True)
     description = models.CharField()
 
     class Meta:
@@ -53,14 +53,12 @@ class Forecast(models.Model):
 
     def __str__(self):
         return (
-            "forecast for "
-            + f"{self.coordinate.latitude: .2f}"
+            f"{self.coordinate.latitude: .2f}"
             + ","
             + f"{self.coordinate.longitude: .2f}"
             + "; "
             + self.date.strftime("%m/%d/%Y, %H:%M:%S")
-            + " "
-            + "day"
-            if self.is_daytime
-            else "night"
+            + ("day" if self.is_daytime else "night")
+            + ", generated: "
+            + self.generated_at.strftime("%m/%d/%Y, %H:%M:%S")
         )

@@ -1,10 +1,16 @@
 // put it all in DOMContentLoaded eventlistener?
 
+const zoomLevel = 13;
+
 let map = L.map('map', {
-  zoomDelta: 0.3
-}).setView([37.10291, -118.71933], 13);
+  zoomDelta: 0.25,
+  zoomSnap: 0,
+  wheelPxPerZoomLevel: 120,
+}).setView([37.10291, -118.71933], zoomLevel);
 // L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map); 
 L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' + '<a href="https://opentopomap.org">OpenTopoMap</a> contributors, ' + 'Data available under the <a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>' }).addTo(map);
+
+L.control.scale().addTo(map);
 
 let popup = L.popup();
 
@@ -49,6 +55,7 @@ async function add(lat, lng) {
   }
 }
 
+// should this also be a POST request?
 async function addForecast(lat, lng) {
   const url = `/add_forecast/?lat=${lat}&lng=${lng}`;
   return fetch(url);
@@ -69,11 +76,52 @@ async function addCoordinate(lat, lng) {
 function updateCoordinates(coordinates) {
   var list = document.getElementById('coordinate-list');
   list.innerHTML = '';
+
   coordinates.forEach(coord => {
+    const lat = coord.latitude;
+    const lng = coord.longitude;
+    const pk = coord.pk;
+
     let item = document.createElement('div');
-    item.textContent = `Lat: ${coord.latitude}, Lng: ${coord.longitude}`;
+    item.id = `${pk}`;
+    let button = document.createElement('button');
+    button.onclick = (e) => {
+      map.setView([lat, lng], zoomLevel);
+    };
+    button.textContent = `${lat},${lng}`;
+    let collapsible = document.createElement('button');
+    collapsible.classList.add('collapsible');
+    collapsible.textContent = '+';
+    let weatherContent = document.createElement('div');
+    weatherContent.classList.add('content');
+    let remove = document.createElement('button');
+    remove.textContent = 'x';
+    remove.onclick = (e) => {
+      fetch(`/delete/${pk}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': '{{ csrf_token }}',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          const divToDelete = document.getElementById(`${pk}`);
+          divToDelete.remove();
+        }
+        else {
+          alert('Error deleting coordinate');
+        }
+      })
+      
+    }
+    
+    collapsible.appendChild(weatherContent);
+    item.appendChild(button)
+    item.appendChild(collapsible)
+    item.appendChild(remove);
     list.appendChild(item);
-  })
+  });
 }
 
 function displayForecast(parsedWeather) {
@@ -88,3 +136,22 @@ function displayForecast(parsedWeather) {
     forecastsDiv.appendChild(item);
   }
 }
+
+document.getElementById('search-form').addEventListener('submit', (e) => {
+  e.preventDefault(); 
+  const query = document.getElementById('search-input').value.trim();
+  fetch(`/search/?q=${encodeURIComponent(query)}`)
+    .then(response => response.json())
+    .then(data => {
+      if(data.latitude && data.longitude) {
+        map.setView([data.latitude, data.longitude], zoomLevel);
+      }
+      else {
+        alert('Location not found!')
+      }
+    })
+    .catch(error => {
+      alert ('An error occurred');
+      alert(error);
+    })
+});

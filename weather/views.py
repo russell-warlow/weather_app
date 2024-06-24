@@ -8,6 +8,9 @@ import json
 import requests
 from datetime import datetime
 from .serializers import ForecastSerializer
+from rest_framework.response import Response
+from rest_framework import status
+from django.views.decorators.http import require_POST
 
 
 def map_view(request):
@@ -41,7 +44,8 @@ def add_coordinate(request):
         # maybe separate into two different endpoints, so one for adding and one for getting?
         # doing too many things on this endpoint, POST request that also returns stuff?
         coordinates = [
-            {"latitude": i.latitude, "longitude": i.longitude} for i in coordinates
+            {"latitude": i.latitude, "longitude": i.longitude, "pk": i.pk}
+            for i in coordinates
         ]
         return JsonResponse({"coordinates": coordinates})
     return JsonResponse({"error": "Invalid request method"}, status=400)
@@ -77,7 +81,7 @@ def add_forecast(request):
                     wind_speed=period["windSpeed"],
                     wind_direction=period["windDirection"],
                     precip_chance=period["probabilityOfPrecipitation"]["value"],
-                    relative_humidity=period["relativeHumidity"]["value"],
+                    # relative_humidity=period["relativeHumidity"]["value"],
                     description=period["detailedForecast"],
                 )
                 parsed_data.append(new_forecast)
@@ -85,3 +89,55 @@ def add_forecast(request):
             return JsonResponse(serializer.data, safe=False)
         except requests.RequestException as e:
             return JsonResponse({"error": str(e)}, status=500)
+
+
+"""
+try peak name, if search is characters
+if search is mostly numbers
+
+add fuzzy search?
+maybe make autocomplete form, try to match characters
+prevent sql injection?
+"""
+
+
+def search(request):
+    query = request.GET.get("q").strip()
+
+    if len(query):
+        firstCharacter = query[0]
+        if firstCharacter.isalpha():
+            peak = Peak.objects.get(name=query)
+            if peak:
+                return JsonResponse(
+                    {"latitude": peak.latitude, "longitude": peak.longitude}
+                )
+            else:
+                return JsonResponse({"error": "cannot parse search string"}, status=400)
+        else:
+            # entered a number, mainly check if the two are valid lat + lng?
+            pass
+    return JsonResponse({"error": "cannot parse search string"}, status=400)
+
+
+@require_POST
+@csrf_exempt
+def delete_coordinate(request, pk):
+    try:
+        coordinate = Coordinate.objects.get(pk=pk)
+    except Coordinate.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    coordinate.delete()
+    return JsonResponse({"status": "success"})
+    # else:
+    #     return JsonResponse({"status": "error"}, status=403)
+
+
+def get_forecast(request, pk):
+    try:
+        forecasts = Forecast.objects.filter(coordinate__pk=pk).order_by(dat)
+        return JsonResponse(forecasts)
+    except Forecast.DoesNotExist:
+        return
+    pass
