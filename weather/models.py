@@ -47,9 +47,10 @@ class Forecast(models.Model):
     precip_chance = models.IntegerField(null=True)
     relative_humidity = models.IntegerField(null=True)
     description = models.CharField()
+    icon_url = models.URLField(null=True, blank=True)
 
     class Meta:
-        ordering = ["coordinate", "date"]
+        ordering = ["coordinate", "generated_at", "date"]
 
     def __str__(self):
         return (
@@ -57,8 +58,8 @@ class Forecast(models.Model):
             + ","
             + f"{self.coordinate.longitude: .2f}"
             + "; "
-            + self.date.strftime("%m/%d/%Y, %H:%M:%S")
-            + ("day" if self.is_daytime else "night")
-            + ", generated: "
+            + self.date.strftime("%m/%d/%Y %H:%M:%S")
+            + " "
+            + "; created: "
             + self.generated_at.strftime("%m/%d/%Y, %H:%M:%S")
         )

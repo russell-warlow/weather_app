@@ -6,7 +6,8 @@ from datetime import datetime
 
 @shared_task
 def fetch_weather():
-    headers = {"User-Agent": "hobby weather project"}
+    # NOTE: need to change this later to include email; for now, don't want rejection from API
+    headers = {"User-Agent": "insomnia/2023.5.8"}
     coordinates = Coordinate.objects.all()
     for c in coordinates:
         try:
@@ -34,6 +35,7 @@ def fetch_weather():
                     precip_chance=period["probabilityOfPrecipitation"]["value"],
                     # relative_humidity=period["relativeHumidity"]["value"],
                     description=period["detailedForecast"],
+                    icon_url="https://api.weather.gov" + period["icon"],
                 )
         except requests.RequestException as e:
             # somehow record error message in backend?

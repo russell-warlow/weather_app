@@ -1,6 +1,23 @@
-.forecast {
-  display: grid;
-  grid-template-columns: 150px;
-  grid-template-rows: 150px;
+#map { 
+  height: 400px;
+}
 
+#forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(35, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+}
+
+.forecast-cell {
+  height: 50px;
+  width: 50px;
+  border: 1px solid black;
+  font-size: x-small;
+}
+
+.grid-label {
+  height: 50px;
+  width: 50px;
+  border: 1px solid black;
+  font-size: small;
 }

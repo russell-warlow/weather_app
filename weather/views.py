@@ -11,6 +11,7 @@ from .serializers import ForecastSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from django.views.decorators.http import require_POST
+import random
 
 
 def map_view(request):
@@ -56,7 +57,7 @@ def add_forecast(request):
         lat = request.GET.get("lat")
         lng = request.GET.get("lng")
         api_url_noaa = f"https://api.weather.gov/points/{lat},{lng}"
-        headers = {"User-Agent": "hobby weather project"}
+        headers = {"User-Agent": "insomnia/2023.5.8"}
 
         try:
             response = requests.get(api_url_noaa, headers=headers)
@@ -83,6 +84,7 @@ def add_forecast(request):
                     precip_chance=period["probabilityOfPrecipitation"]["value"],
                     # relative_humidity=period["relativeHumidity"]["value"],
                     description=period["detailedForecast"],
+                    icon_url="https://api.weather.gov" + period["icon"],
                 )
                 parsed_data.append(new_forecast)
             serializer = ForecastSerializer(parsed_data, many=True)
@@ -136,8 +138,37 @@ def delete_coordinate(request, pk):
 
 def get_forecast(request, pk):
     try:
-        forecasts = Forecast.objects.filter(coordinate__pk=pk).order_by(dat)
+        # maybe can rely on pre-defined ordering of forecasts, so don't need order_by in queryset?
+        forecasts = Forecast.objects.filter(coordinate__pk=pk)
         return JsonResponse(forecasts)
     except Forecast.DoesNotExist:
         return
     pass
+
+
+# add error-handling
+def get_coordinates(request):
+    records = Coordinate.objects.all()
+    coordinates = [
+        {"latitude": i.latitude, "longitude": i.longitude, "pk": i.pk} for i in records
+    ]
+    return JsonResponse({"coordinates": coordinates})
+
+
+# add error-handling
+def get_random_forecast(request):
+    count = Forecast.objects.count()
+    if count == 0:
+        return Response(
+            {"detail": "No forecast available"}, status=status.HTTP_404_NOT_FOUND
+        )
+    random_index = random.randint(0, count - 1)
+    forecast = Forecast.objects.all()[random_index]
+    serializer = ForecastSerializer(forecast)
+    return JsonResponse(serializer.data)
+
+
+def get_set_of_forecasts(request):
+    group = list(Forecast.objects.all()[:10])
+    serializer = ForecastSerializer(group, many=True)
+    return JsonResponse(serializer.data, safe=False)

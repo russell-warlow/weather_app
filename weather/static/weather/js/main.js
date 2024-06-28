@@ -42,17 +42,17 @@ async function add(lat, lng) {
     console.error('Error: ', error);
   }
   
-  try {
-    let response = await addForecast(lat, lng);
-    console.log(response);
-    let data = await response.json();
-    console.log('data: ')
-    console.log(data);
-    displayForecast(data);
-  }
-  catch(error) {
-    console.error('Error fetching weather data: ', error);
-  }
+  // try {
+  //   let response = await addForecast(lat, lng);
+  //   console.log(response);
+  //   let data = await response.json();
+  //   console.log('data: ')
+  //   console.log(data);
+  //   displayForecast(data);
+  // }
+  // catch(error) {
+  //   console.error('Error fetching weather data: ', error);
+  // }
 }
 
 // should this also be a POST request?
@@ -124,19 +124,6 @@ function updateCoordinates(coordinates) {
   });
 }
 
-function displayForecast(parsedWeather) {
-  var forecastsDiv = document.getElementById('forecast-list');
-  for(let i=0; i<parsedWeather.length; i++) {
-    let forecast = parsedWeather[i];
-    let time = forecast['is_daytime'] ? 'day' : 'early AM';
-    let date = forecast['date'].split('T')[0];
-    let detail = forecast['description'];
-    let item = document.createElement('div');
-    item.textContent = `${date} ${time}: ${detail}`;
-    forecastsDiv.appendChild(item);
-  }
-}
-
 document.getElementById('search-form').addEventListener('submit', (e) => {
   e.preventDefault(); 
   const query = document.getElementById('search-input').value.trim();
@@ -155,3 +142,299 @@ document.getElementById('search-form').addEventListener('submit', (e) => {
       alert(error);
     })
 });
+
+async function showCoordinates() {
+  try {
+    let response = await fetch('/get_coordinates/');
+    let data = await response.json();
+    updateCoordinates(data.coordinates);
+  } 
+  catch(error) {
+    console.error('Error: ', error);
+  }
+};
+
+
+// assume given the earliest generated forecast
+function createGrid(forecastJson) {
+  let wrapper = document.getElementById('forecast-grid');
+  wrapper.innerHTML = '';
+  let firstDate = forecastJson['date'];
+  let firstIsDaytime = forecastJson['is_daytime'];
+  let firstGeneratedDate = forecastJson['generated_at'];
+  wrapper.setAttribute('data-first-date', firstDate);
+  wrapper.setAttribute('data-first-isdaytime', firstIsDaytime);
+  wrapper.setAttribute('data-first-generated-at', firstGeneratedDate);
+  let currentDate = new Date(firstDate);
+  let timeOfDay = '';
+  for(let i=0; i<8; i++) {
+    for(let j=0; j<35; j++) {
+      let element = document.createElement('div');
+      if(i == 0 && j == 0) {
+        // do nothing?
+      }
+      else if (i == 0 && j > 0) {
+        /*
+        date will be ... 
+        if first forecast is nighttime, then next forecast will be 
+        different day, j=1 is first forecast so j=2 will be different day, 
+        so j=(evens) will be new day
+        
+        else first forecast is daytime, so next day will be two forecasts from now
+        j=1 is first forecast, so j=3 will be different day,
+        so j=(odds) will be new day
+        
+        day/night will be ...
+        first forecast will be on j=1, so:
+        -odds will be same as first forecast
+        -events will be opposite as first forecast
+        */
+        if(!firstIsDaytime) {
+          if (j % 2 == 0) {
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        }
+        else {
+          if (j > 1 && j % 2 == 1) {
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        }
+
+        if(j % 2 == 1) {
+          timeOfDay = firstIsDaytime ? '' : 'night';
+        }
+        else {
+          timeOfDay = !firstIsDaytime ? '' : 'night';
+        }
+        element.textContent = `${currentDate.toDateString()} ${timeOfDay}`;
+      }
+      // calculate day of week name or just use numerical dates?
+      else if (i > 0 && j == 0) {
+        let nextForecastDate = new Date(firstDate);
+        nextForecastDate.setDate(nextForecastDate.getDate() + i - 1);
+        element.textContent = nextForecastDate.toDateString();
+      }
+      // do nothing
+      else {
+
+      }
+
+      // NOTE: def a hack, need to change later
+      if (element.textContent === '') {
+        element.classList.add('forecast-cell');
+      }
+      else {
+        element.classList.add('grid-label');
+      }
+      element.style.gridRow = i+1;
+      element.style.gridColumn = j+1;
+      element.setAttribute('data-row', i+1);
+      element.setAttribute('data-col', j+1);
+      wrapper.appendChild(element);
+    }
+  }
+}
+
+/*
+how efficiently get icons from server? maybe do some cache?
+it's going to be a lot of fetch requests
+
+how map the date to the row + column of the grid?
+*/
+function addForecastToGrid(forecastJson) {
+  let wrapper = document.getElementById('forecast-grid');
+  let firstDate = new Date(wrapper.getAttribute('data-first-date'));
+  let firstIsDaytime = wrapper.getAttribute('data-first-isdaytime') === 'true';
+  let firstGeneratedDate = new Date(wrapper.getAttribute('data-first-generated-at'));
+
+  let targetDate = new Date(forecastJson['date']);
+  let targetIsDaytime = forecastJson['is_daytime'];
+
+  let targetGeneratedDate = new Date(forecastJson['generated_at']);
+
+  /*
+  "generated_at" field to find the row:
+  calc difference between firstDate and forecast date?
+  determine number of days?
+
+  "date" field to find the column:
+  isDaytime trickery
+
+  if both are day or both are night, then it's easy
+  if first is night, target is day then -1 ?
+  if first is day, target is night then +1 ?
+
+  test case: first and target are the same
+  should return [2, 2]
+
+
+  */
+
+  console.log('===adding new forecast ===');
+  let daysBetweenForecastGeneration = 0;
+  while(true) {
+    console.log('first date, days: ' + firstGeneratedDate.getDate());
+    console.log('generated date, date: ' + targetGeneratedDate.getDate());
+    if(firstGeneratedDate.getDate() == targetGeneratedDate.getDate()) {
+      break;
+    }
+    else {
+      firstGeneratedDate.setDate(firstGeneratedDate.getDate() + 1);
+      daysBetweenForecastGeneration = daysBetweenForecastGeneration + 1;
+    }
+  }
+  console.log('daysBetweenForecastGeneration: ' + daysBetweenForecastGeneration);
+
+
+  let numDays = 0;
+  while(true) {
+    console.log('first date, days: ' + firstDate.getDate());
+    console.log('target date, date: ' + targetDate.getDate());
+    if(firstDate.getDate() == targetDate.getDate()) {
+      break;
+    }
+    else {
+      firstDate.setDate(firstDate.getDate() + 1);
+      numDays = numDays + 1;
+    }
+  }
+  console.log('numDays: ' + numDays);
+
+  let numHalfdays = numDays * 2;
+  console.log(`first isdaytime: ${firstIsDaytime}, typeof: ${typeof(firstIsDaytime)}`);
+  console.log(`target isdaytime: ${targetIsDaytime}, typeof: ${typeof(targetIsDaytime)}`);
+
+  if (firstIsDaytime === true && targetIsDaytime === false) {
+    console.log('plus one');
+    numHalfdays = numHalfdays + 1;
+  }
+  else if(firstIsDaytime === false && targetIsDaytime === true) {
+    console.log('subtract one');
+    numHalfdays = numHalfdays - 1;
+  }
+
+  // forecast squares start at [2, 2]
+  let row = daysBetweenForecastGeneration + 2;
+  let col = numHalfdays + 2;
+  let cell = getGridItem(row, col);
+  if (cell.style.backgroundColor !== '') {
+    console.log('error adding forecast to grid: mapping to wrong square');
+    console.log(`row: ${row}, col: ${col}`);
+    console.log(`forecastJson: ${forecastJson}`);
+  }
+
+  /*
+  generate weather widget, NOTE: break into separate function later
+
+  ideally: 
+  show icon, not sure how if not stored on server for very long ... ?
+  hover over to get more detailed?
+
+  basic: 
+  temp
+  wind speed + direction
+  chance of precip
+  */
+  let temp = document.createElement('div');
+  let qualifier = forecastJson['is_daytime'] ? 'High' : 'Low';
+  temp.textContent = `${qualifier}: ${forecastJson['temperature']}F`;
+  let wind = document.createElement('div');
+  wind.textContent = `${forecastJson['wind_speed']} ${forecastJson['wind_direction']}`;
+  let precip = document.createElement('div');
+  console.log(`type of forecastJson[precip_chance]: ${forecastJson['precip_chance']}`);
+  let chance = forecastJson['precip_chance'] === null ? 0 : forecastJson['precip_chance'];
+  precip.textContent = `Precip: ${chance}%`;
+  cell.appendChild(temp);
+  cell.appendChild(wind);
+  cell.appendChild(precip);
+  cell.style.backgroundColor = "Aquamarine";
+  cell.setAttribute('title', forecastJson['description']);
+  console.log(`adding to row: ${row}, col: ${col}`);
+}
+
+function getGridItem(row, col) {
+  return document.querySelector(`.forecast-cell[data-row="${row}"][data-col="${col}"]`);
+}
+
+function getFirstForecast() {
+
+}
+
+function addLabelsToGrid(forecastJson) {
+  let wrapper = document.getElementById('forecast-grid');
+
+}
+
+function addForecastsToGrid(queryset) {
+  for(let i=0; i<queryset.length; i++) {
+    addForecastToGrid(queryset[i]);
+  }
+}
+
+function printForecastJson(forecastJson) {
+  let element = document.getElementById('forecast-json');
+  let jsonStr = JSON.stringify(forecastJson);
+  let oldContent = element.textContent;
+  element.textContent = oldContent + '\n' + jsonStr;
+}
+
+
+function printUIFriendlyForecast(forecastJson) {
+  let forecastDiv = document.getElementById('forecast-json');
+  let time = forecastJson['is_daytime'];
+  let date = new Date(forecastJson['date']).toLocaleString();
+  let genAt = new Date(forecastJson['generated_at']).toLocaleString();
+  let oldContent = element.textContent;
+  forecastDiv.textContent = oldContent + '\n' + `${date}; daytime? ${time}; created: ${genAt}`;
+}
+
+async function showRandomForecast() {
+  try {
+    let response = await fetch('/get_random_forecast/');
+    let data = await response.json();
+    printUIFriendlyForecast(data);
+    printForecastJson(data);
+    createGrid(data);
+    addForecastToGrid(data);
+  }
+  catch(error) {
+    console.error('Error: ', error);
+  }
+};
+
+async function renderSetOfForecasts() {
+  try {
+    let response = await fetch('/get_set_of_forecasts/');
+    let data = await response.json();
+    let first = data[0];
+    printForecastJson(first);
+    createGrid(first);
+    console.log(`data length: ${data.length}`);
+    addForecastsToGrid(data);
+  }
+  catch(error) {
+    console.error('Error adding set of forecasts to grid: ' + error);
+  }
+}
+
+/* 
+what needs to be done?
+create labels 
+get dates 
+get corresponding day of the week?
+create widgets and add forecast data?
+
+if check weather at nighttime, then one fewer forecast for that day
+but still same number of total forecasts
+either way, can always check forecast sometime in the AM so assure
+that we'll get AM then PM every day?
+
+some error-checking for if forecast has already been added to grid?
+
+manually generate data for consecutive days to test grid?
+start writing unit tests
+*/
+
+showCoordinates();
+// showRandomForecast();
+renderSetOfForecasts();
