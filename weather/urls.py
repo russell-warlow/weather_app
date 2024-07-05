@@ -6,8 +6,8 @@ from .views import (
     search,
     delete_coordinate,
     get_coordinates,
-    get_random_forecast,
-    get_set_of_forecasts,
+    get_forecasts,
+    get_peaks,
 )
 
 urlpatterns = [
@@ -17,6 +17,6 @@ urlpatterns = [
     path("search/", search, name="search"),
     path("delete/<int:pk>/", delete_coordinate, name="delete_coordinate"),
     path("get_coordinates/", get_coordinates, name="get_coordinates"),
-    path("get_random_forecast/", get_random_forecast, name="get_random_forecast"),
-    path("get_set_of_forecasts/", get_set_of_forecasts, name="get_set_of_forecasts"),
+    path("get_forecasts/<int:pk>/", get_forecasts, name="get_forecasts"),
+    path("peaks/", get_peaks, name="get_peaks"),
 ]

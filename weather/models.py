@@ -50,16 +50,16 @@ class Forecast(models.Model):
     icon_url = models.URLField(null=True, blank=True)
 
     class Meta:
-        ordering = ["coordinate", "generated_at", "date"]
+        ordering = ["generated_at", "coordinate", "date"]
 
     def __str__(self):
         return (
-            f"{self.coordinate.latitude: .2f}"
-            + ","
-            + f"{self.coordinate.longitude: .2f}"
-            + "; "
-            + self.date.strftime("%m/%d/%Y %H:%M:%S")
-            + " "
-            + "; created: "
+            "created: "
             + self.generated_at.strftime("%m/%d/%Y, %H:%M:%S")
+            + "; ["
+            + f"{self.coordinate.latitude: .2f}"
+            + ", "
+            + f"{self.coordinate.longitude: .2f}"
+            + "]; start at: "
+            + self.date.strftime("%m/%d/%Y %H:%M:%S")
         )

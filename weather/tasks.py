@@ -2,12 +2,13 @@ from weather.models import Coordinate, Forecast
 from celery import shared_task
 import requests
 from datetime import datetime
+from weather_app.config import CONTACT_EMAIL
 
 
 @shared_task
 def fetch_weather():
     # NOTE: need to change this later to include email; for now, don't want rejection from API
-    headers = {"User-Agent": "insomnia/2023.5.8"}
+    headers = {"User-Agent": f"WeatherTrackingApp/1.0 ${CONTACT_EMAIL}"}
     coordinates = Coordinate.objects.all()
     for c in coordinates:
         try:
@@ -37,6 +38,30 @@ def fetch_weather():
                     description=period["detailedForecast"],
                     icon_url="https://api.weather.gov" + period["icon"],
                 )
+
+            # limit_forecast_records(c.pk, 14 * 7)
+
         except requests.RequestException as e:
             # somehow record error message in backend?
             pass
+        # finally:
+        #     fetch_weather.request.delivery_info["broker"].ack(
+        #         fetch_weather.request.delivery_info["delivery_tag"]
+        #     )
+
+
+def limit_forecast_records(pk, limit):
+    count = (
+        Forecast.objects.filter(coordinate__pk=pk)
+        .order_by("generated_at")
+        .order_by("date")
+        .count()
+    )
+    if count > limit:
+        excess = count - limit
+        old_forecasts = (
+            Forecast.objects.filter(coordinate__pk=pk)
+            .order_by("generated_at")
+            .order_by("date")[:excess]
+        )
+        old_forecasts.delete()

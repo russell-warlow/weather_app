@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from weather.models import Coordinate, Forecast
+from weather.models import Coordinate, Forecast, Peak
 from django.contrib.auth.models import User
 
 
@@ -36,4 +36,11 @@ class ForecastSerializer(serializers.ModelSerializer):
             "precip_chance",
             "relative_humidity",
             "description",
+            "icon_url",
         ]
+
+
+class PeakSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Peak
+        fields = ["name"]

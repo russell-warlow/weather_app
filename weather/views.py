@@ -7,11 +7,12 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 import requests
 from datetime import datetime
-from .serializers import ForecastSerializer
+from .serializers import ForecastSerializer, PeakSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from django.views.decorators.http import require_POST
 import random
+from weather_app.config import CONTACT_EMAIL
 
 
 def map_view(request):
@@ -52,12 +53,45 @@ def add_coordinate(request):
     return JsonResponse({"error": "Invalid request method"}, status=400)
 
 
+def get_coordinates(request):
+    pass
+    # if request.method == "POST":
+    #     data = json.loads(request.body)
+    #     lat = data.get("latitude")
+    #     lng = data.get("longitude")
+
+    #     if request.user.is_authenticated:
+    #         coord, created = Coordinate.objects.get_or_create(
+    #             latitude=lat, longitude=lng, user=request.user
+    #         )
+    #         # say can't add duplicate coordinates? or handle it at the db level?
+    #         coordinates = Coordinate.objects.filter(user=request.user)
+    #     else:
+    #         session_key = request.session.session_key
+    #         if not session_key:
+    #             request.session.create()
+    #             session_key = request.session.session_key
+    #         coord, created = Coordinate.objects.get_or_create(
+    #             latitude=lat, longitude=lng, session_key=session_key
+    #         )
+    #         coordinates = Coordinate.objects.filter(session_key=session_key)
+
+    #     # maybe separate into two different endpoints, so one for adding and one for getting?
+    #     # doing too many things on this endpoint, POST request that also returns stuff?
+    #     coordinates = [
+    #         {"latitude": i.latitude, "longitude": i.longitude, "pk": i.pk}
+    #         for i in coordinates
+    #     ]
+    #     return JsonResponse({"coordinates": coordinates})
+    # return JsonResponse({"error": "Invalid request method"}, status=400)
+
+
 def add_forecast(request):
     if request.method == "GET":
         lat = request.GET.get("lat")
         lng = request.GET.get("lng")
         api_url_noaa = f"https://api.weather.gov/points/{lat},{lng}"
-        headers = {"User-Agent": "insomnia/2023.5.8"}
+        headers = {"User-Agent": f"WeatherTrackingApp/1.0 ${CONTACT_EMAIL}"}
 
         try:
             response = requests.get(api_url_noaa, headers=headers)
@@ -136,14 +170,19 @@ def delete_coordinate(request, pk):
     #     return JsonResponse({"status": "error"}, status=403)
 
 
-def get_forecast(request, pk):
+# return http 204 no content response?
+def get_forecasts(request, pk):
     try:
         # maybe can rely on pre-defined ordering of forecasts, so don't need order_by in queryset?
-        forecasts = Forecast.objects.filter(coordinate__pk=pk)
-        return JsonResponse(forecasts)
+        forecasts = (
+            Forecast.objects.filter(coordinate__pk=pk)
+            .order_by("generated_at")
+            .order_by("date")
+        )
+        serializer = ForecastSerializer(forecasts, many=True)
+        return JsonResponse(serializer.data, safe=False)
     except Forecast.DoesNotExist:
         return
-    pass
 
 
 # add error-handling
@@ -155,20 +194,7 @@ def get_coordinates(request):
     return JsonResponse({"coordinates": coordinates})
 
 
-# add error-handling
-def get_random_forecast(request):
-    count = Forecast.objects.count()
-    if count == 0:
-        return Response(
-            {"detail": "No forecast available"}, status=status.HTTP_404_NOT_FOUND
-        )
-    random_index = random.randint(0, count - 1)
-    forecast = Forecast.objects.all()[random_index]
-    serializer = ForecastSerializer(forecast)
-    return JsonResponse(serializer.data)
-
-
-def get_set_of_forecasts(request):
-    group = list(Forecast.objects.all()[:10])
-    serializer = ForecastSerializer(group, many=True)
+def get_peaks(request):
+    peaks = Peak.objects.all()
+    serializer = PeakSerializer(peaks, many=True)
     return JsonResponse(serializer.data, safe=False)

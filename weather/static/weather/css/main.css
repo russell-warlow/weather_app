@@ -1,23 +1,75 @@
 #map { 
   height: 400px;
+  margin-top: 10px;
+  z-index: -1;
 }
 
-#forecast-grid {
+#search-form {
+  position: relative;
+  width: 300px;
+}
+
+.options-container {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  max-height: 400px;
+  overflow-y: auto;
+  display: none;
+}
+
+.option {
+  padding: 10px;
+  cursor: pointer;
+  position: relative;
+}
+
+.option:hover {
+  background-color: #f1f1f1;
+}
+
+.forecast-grid {
   display: grid;
   grid-template-columns: repeat(35, 1fr);
   grid-template-rows: repeat(8, 1fr);
 }
 
 .forecast-cell {
-  height: 50px;
-  width: 50px;
+  height: 100px;
+  width: 70px;
   border: 1px solid black;
-  font-size: x-small;
+  font-size: xx-small;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.forecast-cell > img {
+  height: 70px;
+  width: 70px;
+
 }
 
 .grid-label {
-  height: 50px;
-  width: 50px;
+  height: 100px;
+  width: 70px;
   border: 1px solid black;
   font-size: small;
+}
+
+.collapsible:hover {
+  background-color: darkgray;
+}
+
+.collapsible {
+  background-color: #eee;
+  cursor: pointer;
+  border: 1px solid;
+  font-size: 14px;
+}
+
+.content {
+  display: none;
 }

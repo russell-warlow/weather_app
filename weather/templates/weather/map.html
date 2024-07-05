@@ -15,16 +15,15 @@
   </head>
 </html>
 <body>
+  <h1>Weather Tracker</h1>
   <form id="search-form">
     <input id="search-input" type="text" placeholder="Search by peak name ...">
     <button id="search-button" type="submit">Search</button>
+    <div id="options-container" class="options-container"></div>
   </form>
   <div id="map"></div>
   <h1>Coordinates</h1>
   <div id="coordinate-list"></div>
-  <h1>Forecasts</h1>
-  <div id="forecast-json"></div>
-  <div id="forecast-grid"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin=""></script>

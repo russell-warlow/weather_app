@@ -148,6 +148,8 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BEAT_SCHEDULE = {
     "fetch-weather-every-midnight": {
         "task": "weather.tasks.fetch_weather",
-        "schedule": crontab(minute="*/1"),
+        "schedule": crontab(hour=9, minute=0),
     },
 }
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
