@@ -34,14 +34,14 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "weather",
     "django.contrib.auth",
+    "django.contrib.admin",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "weather",
     "django_celery_beat",
 ]
 
@@ -153,3 +153,7 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+# leading slash required for redirect to a path appended to domain root
+# otherwise redirected to path appended to the current url, i.e. relative path
+LOGIN_REDIRECT_URL = "/map"
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

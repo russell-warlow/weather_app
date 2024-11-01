@@ -1,12 +1,18 @@
 #map { 
   height: 400px;
   margin-top: 10px;
-  z-index: -1;
+  /* set map to have lower z-index than options for overlay */
+  z-index: 1;
 }
 
 #search-form {
   position: relative;
   width: 300px;
+}
+
+#map-features {
+  display: flex;
+  height: 400px;
 }
 
 .options-container {
@@ -15,15 +21,18 @@
   left: 0;
   right: 0;
   background-color: #fff;
-  max-height: 400px;
+  border: 1px solid;
+  max-height: 410px;
   overflow-y: auto;
   display: none;
+  z-index: 2;
 }
 
 .option {
   padding: 10px;
   cursor: pointer;
   position: relative;
+  z-index: 2;
 }
 
 .option:hover {
@@ -72,4 +81,48 @@
 
 .content {
   display: none;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.accounts {
+  display: flex;
+  align-items: flex-start;
+}
+
+.hyperlink {
+  background: none; 
+  border: none; 
+  color: #007bff; 
+  text-decoration: underline; 
+  cursor: pointer; 
+  padding: 0; 
+  font-size: 1em;
+}
+
+.progress-bar {
+  /* somehow not used or overriden ... ?
+  width: 100px; */
+
+  height: .25em;
+  background-color: lightskyblue;
+  border-radius: 1.5em;
+  color: black;
+}
+
+.coordinate-header {
+  display: flex;
+}
+
+.coordinate {
+  width: 300px;
+}
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  width: 150px;
 }

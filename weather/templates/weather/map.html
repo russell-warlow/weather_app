@@ -1,3 +1,4 @@
+{% comment %} why load static? b/c leaflet? {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
@@ -15,7 +16,20 @@
   </head>
 </html>
 <body>
-  <h1>Weather Tracker</h1>
+  <div class="header">
+    <h1>Weather Tracker</h1>
+    <div class="accounts">
+      {% if user.is_authenticated %}
+        <span>Welcome, {{ user.username }}!</span>
+        <form id="logout-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="hyperlink">Logout</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}?next={{ request.path }}">Login</a>
+      {% endif %}
+    </div>
+  </div>
   <form id="search-form">
     <input id="search-input" type="text" placeholder="Search by peak name ...">
     <button id="search-button" type="submit">Search</button>
@@ -23,7 +37,26 @@
   </form>
   <div id="map"></div>
   <h1>Coordinates</h1>
-  <div id="coordinate-list"></div>
+  <div>
+    <button id="expand" class="hyperlink">Expand</button>
+    <button id="collapse" class="hyperlink">Collapse</button>
+  </div>
+  <div id="coordinate-list">
+    {% for c in coordinates %}
+      <div class="coordinate-row">
+        <div id={{ c.pk }} class="coordinate-header">
+          <button class="coordinate"
+                  data-lat="{{ c.latitude }}"
+                  data-lng="{{ c.longitude }}">{{ c.latitude|join:"," }}{{ c.longitude }}</button>
+          <button class="collapsible" disabled>+</button>
+          <button class="remove">x</button>
+          <div class="progress-container">
+            <div class="progress-bar"></div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin=""></script>

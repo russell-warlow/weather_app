@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import path, include
+from django.contrib.auth import views as auth_views
 from .views import (
     map_view,
     add_coordinate,
@@ -19,4 +20,6 @@ urlpatterns = [
     path("get_coordinates/", get_coordinates, name="get_coordinates"),
     path("get_forecasts/<int:pk>/", get_forecasts, name="get_forecasts"),
     path("peaks/", get_peaks, name="get_peaks"),
+    path("accounts/", include("django.contrib.auth.urls")),
+    # path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 ]

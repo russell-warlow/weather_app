@@ -14,172 +14,422 @@ L.control.scale().addTo(map);
 
 let popup = L.popup();
 
-function onMapClick(e) {
-  popup
-    .setLatLng(e.latlng)
-    .setContent(createMenu(e.latlng))
-    .openOn(map);
-}
-
 map.on('click', onMapClick)
 
-function createMenu(latlng) {
-  let lat = latlng.lat;
-  let lng = latlng.lng;
-  return `Latitude: ${lat} 
-          '<br>Longitude: ${lng} 
-          '<br><button onclick="add(${lat}, ${lng})">Add to List</button>`;
+function onMapClick(mapEvent) {
+  let csrftoken = getCookie('csrftoken');
+  let lat = mapEvent.latlng.lat;
+  let lng = mapEvent.latlng.lng;
+
+  popup
+    .setLatLng(mapEvent.latlng)
+    .setContent(createMenu(lat, lng, csrftoken))
+    .openOn(map);
+
+  document.getElementById('add-coordinate-form').addEventListener('submit', async function(submitEvent) {
+    submitEvent.preventDefault();
+    let newEntry = await addCoordinateNew(lat, lng, csrftoken);
+    await addFirstForecast(lat, lng, csrftoken);
+    addWeatherGrid(newEntry);
+  });
 }
 
-async function add(lat, lng) {
-  try {
-    let response = await addCoordinate(lat, lng);
-    let data = await response.json();
+async function doNext(lat, lng, csrftoken) {
+  // get most recently added coordinate and bind the weather, make it into a promise so can run asynchronously
+  // also pass in the csrf stuff
+  // let newEntry = document.getElementById('coordinate-list').lastElementChild;
+  let newEntry = await addFirstForecast(lat, lng, csrftoken)
+  addWeatherGrid(newEntry);
+}
 
-    let response2 = await addForecast(lat, lng);
-    let data2 = await response2.json();
-    
-    if (data2.length != 14) {
-      throw Error('issue with API, unable to fetch forecasts')
-    }
-
-    updateCoordinates(data.coordinates);
-  } 
-  catch(error) {
-    console.error('Error: ', error);
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          // Does this cookie string begin with the name we want?
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+          }
+      }
   }
+  return cookieValue;
 }
 
-async function addCoordinate(lat, lng) {
-  return fetch('/add_coordinate/', {
+function createMenu(lat, lng, csrftoken) {
+  let formHtml = `
+    <form id="add-coordinate-form" method="post">
+      <input type="hidden" name="csrfmiddlewaretoken" value="${csrftoken}">
+      <div id="latitude">Latitude: ${lat}</div>
+      <div id="longitude">Longitude: ${lng}</div>
+      <button type="submit">Add Coordinate</button>
+    </form>
+    `;
+  return formHtml;
+
+  // /* old */
+  // return `Latitude: ${lat} 
+  //         '<br>Longitude: ${lng} 
+  //         '<br><button onclick="addCoordinateNew(${lat}, ${lng})">Add to List</button>`;
+}
+
+async function addCoordinateNew(lat, lng, csrftoken) {
+  var entry;
+
+  const response = await fetch('/add_coordinate/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-CSRFToken': '{{ csrf_token }}',
+      'X-CSRFToken': csrftoken,
     },
     body: JSON.stringify({ latitude: lat, longitude: lng})
+  });
+  if(!response.ok) throw new Error ('failed to add new coordinate');
+  let json = await response.json();
+  return createEntry(json.coordinate, csrftoken);
+  // .then(response => {
+  //   console.log('response: ' + response);
+  //   return response.json();
+  // })
+  // .then(data => {
+  //   console.log('data: ' + data);
+  //   if(data.error) {
+  //     console.error(data.error);
+  //   } 
+  //   else {
+  //     console.log(data.message);
+  //     if(!data.created) {
+  //       // NOTE: change this to show popup dialog instead
+  //       console.log("could not add coordinate");
+  //     }
+  //     entry = createEntry(data.coordinate);
+      
+  //   }
+  // })
+  // return entry;
+}
+
+// async function add(lat, lng) {
+//   try {
+//     let response = await addCoordinate(lat, lng);
+//     let data = await response.json();
+
+//     let response2 = await addForecast(lat, lng);
+//     let data2 = await response2.json();
+    
+//     // NOTE: kind of a hack, make this cleaner
+//     if (data2.length != 14) {
+//       throw Error('issue with API, unable to fetch forecasts')
+//     }
+
+//     updateCoordinates(data.coordinates);
+//   } 
+//   catch(error) {
+//     console.error('Error: ', error);
+//   }
+// }
+
+// async function addCoordinate(lat, lng) {
+//   return fetch('/add_coordinate/', {
+//     method: 'POST',
+//     headers: {
+//       'Content-Type': 'application/json',
+//       'X-CSRFToken': '{{ csrf_token }}',
+//     },
+//     body: JSON.stringify({ latitude: lat, longitude: lng})
+//   })
+// }
+
+async function addFirstForecast(lat, lng, csrftoken) {
+  let response = await fetch(`/add_forecast/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrftoken,
+    },
+    body: JSON.stringify({ latitude: lat, longitude: lng})
+    // why no body here like addCoorinate? might be worth it to make it consistent
   })
+  if (!response.ok) throw new Error('failed to add initial forecast');
+  let data = await response.json();
+  return data;
 }
 
 // should this also be a POST request?
+// is this even used anymore?
 async function addForecast(lat, lng) {
   const url = `/add_forecast/?lat=${lat}&lng=${lng}`;
   return fetch(url);
 }
 
-
-
-// can i just append instead of clearing and re-adding all?
-function updateCoordinates(coordinates) {
-  var listOfCoordinates = document.getElementById('coordinate-list');
-  listOfCoordinates.innerHTML = '';
-
-  coordinates.forEach(async coord => {
-    const lat = coord.latitude;
-    const lng = coord.longitude;
-    const pk = coord.pk;
-
-    let coordinateEntry = document.createElement('div');
-    coordinateEntry.id = `${pk}`;
-    coordinateEntry.classList.add('coordinate-row');
-    let button = document.createElement('button');
-    button.onclick = (e) => {
-      map.setView([lat, lng], zoomLevel);
-      // maybe don't need to assign?
-      
-      // this looks a bit cleaner, no?
-      L.marker([lat,lng]).addTo(map).bindPopup(`${lat}, ${lng}`).setLatLng([lat,lng]).openPopup();
-
-      // let popup = L.popup()
-      //   .setLatLng([lat, lng])
-      //   .setContent(`${lat}, ${lng}`)
-      //   .openOn(map);
-    };
-    button.textContent = `${lat},${lng}`;
-    let collapsible = document.createElement('button');
-    collapsible.classList.add('collapsible');
-    collapsible.textContent = '+';
-    // NOTE: prevent double generation of table when click and unclick?
-    // change this to block vs hidden
-    collapsible.onclick = (e) => {
-      // this.classList.toggle("active");
-      var content = document.getElementById(`forecast-${pk}`);
-      content.parentElement.style.display = content.parentElement.style.display === "block" ? "none" : "block";
-    }
-    let remove = document.createElement('button');
-    remove.textContent = 'x';
-    remove.onclick = (e) => {
-      if (confirm("Are you sure you want to delete a coordinate?")) {
-        fetch(`/delete/${pk}/`, {
-          method: 'POST',
-          headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
-          },
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.status === 'success') {
-            const divToDelete = document.getElementById(`${pk}`);
-            divToDelete.remove();
-          }
-          else {
-            // NOTE: are these necessary?
-            alert('Error deleting coordinate');
-          }
-        })
-      }
-      else {
-        // NOTE: are these necessary?
-        alert('Coordinate not deleted.');
-      }
-    }
-
-    /*
-    how create a grid for each coordinate?
-    need way of identifying the element i'm updating, maybe use primary key?
-    how does primary key work if two identical coordinates?
-    better to create grid in the background instead of basing it on button click, right ... ?
-
-    create grid here? 
-    fire celery task?
-
-    */
-    
-    let response = await fetch(`/get_forecasts/${pk}/`);
-    let data = await response.json();
-    let grid = createGrid(pk, data);
-    let weatherContent = document.createElement('div');
-    weatherContent.classList.add('content');
-    weatherContent.appendChild(grid);
-    coordinateEntry.appendChild(button)
-    coordinateEntry.appendChild(collapsible)
-    coordinateEntry.appendChild(remove);
-    coordinateEntry.appendChild(weatherContent);
-    listOfCoordinates.appendChild(coordinateEntry);
-    
-    // have to wait until grid is added to the DOM before adding forecasts ...
-    addForecastsToGrid(pk, data);
-  });
+function displayCoordinates(coordinates) {
+  var lst = document.getElementById('coordinate-list');
+  lst.innerHTML = '';
+  coordinates.forEach(coord => lst.appendChild(createEntry(coord)));
 }
 
-document.getElementById('search-form').addEventListener('submit', (e) => {
-  e.preventDefault(); 
-  const query = document.getElementById('search-input').value.trim();
-  fetch(`/search/?q=${encodeURIComponent(query)}`)
-    .then(response => response.json())
-    .then(data => {
-      if(data.latitude && data.longitude) {
-        map.setView([data.latitude, data.longitude], zoomLevel);
-        L.marker([data.latitude, data.longitude]).addTo(map)
-      }
-      else {
-        alert('Location not found!')
-      }
-    })
-    .catch(error => {
-      alert (`Cannot parse: ${query}`);
-    })
-});
+function createEntry(coord, csrftoken) {
+  const lat = coord.latitude;
+  const lng = coord.longitude;
+  const pk = coord.pk;
+
+  let coordinateEntry = document.createElement('div');
+  // coordinateEntry.id = `${pk}`;
+  coordinateEntry.classList.add('coordinate-row');
+  let button = document.createElement('button');
+  button.onclick = (e) => {
+    map.setView([lat, lng], zoomLevel);
+    // maybe don't need to assign?
+    
+    // this looks a bit cleaner, no?
+    L.marker([lat,lng]).addTo(map).bindPopup(`${lat}, ${lng}`).setLatLng([lat,lng]).openPopup();
+
+    // let popup = L.popup()
+    //   .setLatLng([lat, lng])
+    //   .setContent(`${lat}, ${lng}`)
+    //   .openOn(map);
+  };
+  button.textContent = `${lat},${lng}`;
+  button.classList.add('coordinate');
+  button.dataset.lat = lat;
+  button.dataset.lng = lng;
+  let collapsible = document.createElement('button');
+  collapsible.classList.add('collapsible');
+  collapsible.textContent = '+';
+  // NOTE: prevent double generation of table when click and unclick?
+  // change this to block vs hidden
+  collapsible.onclick = (e) => {
+    // this.classList.toggle("active");
+    var content = document.getElementById(`forecast-${pk}`);
+    let parent = content.parentElement;
+    if (parent == null) {
+      throw Error('null parent element for weathergrid)');
+    }
+    parent.style.display = (parent.style.display === "block") ? "none" : "block";
+  }
+  collapsible.disabled = true;
+  let remove = document.createElement('button');
+  remove.textContent = 'x';
+  remove.classList.add('remove');
+  remove.onclick = (e) => {
+    if (confirm("Are you sure you want to delete a coordinate?")) {
+      fetch(`/delete/${pk}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrftoken,
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          const divToDelete = document.getElementById(`${pk}`);
+          divToDelete.parentElement.remove();
+        }
+        else {
+          // NOTE: are these necessary?
+          alert('Error deleting coordinate');
+        }
+      })
+    }
+    else {
+      // NOTE: are these necessary?
+      alert('Coordinate not deleted.');
+    }
+  }
+
+  // create progress bar
+  let progressBar = document.createElement('div');
+  progressBar.classList.add('progress-bar');
+
+  let progressContainer = document.createElement('div');
+  progressContainer.classList.add('progress-container');
+  progressContainer.appendChild(progressBar);
+
+  let coordinateHeader = document.createElement('div');
+  coordinateHeader.classList.add('coordinate-header');
+  coordinateHeader.id = pk;
+
+  coordinateHeader.appendChild(button)
+  coordinateHeader.appendChild(collapsible)
+  coordinateHeader.appendChild(remove);
+  coordinateHeader.appendChild(progressContainer);
+
+  coordinateEntry.appendChild(coordinateHeader);
+  
+  startBar(progressBar);
+
+  let list = document.getElementById('coordinate-list');
+  list.appendChild(coordinateEntry);
+  return coordinateEntry;
+}
+
+function startBar(progressBar) {
+  var width = 1;
+  setInterval(frame, 40);
+
+  function frame() {
+    if (width >= 100) {
+      width = 0;
+    }
+    else {
+      width++;
+      progressBar.style.width = width + "%";
+    }
+  }
+}
+
+function startProgressBars() {
+  let bars = document.getElementsByClassName('progress-bar');
+  for(let i=0; i<bars.length; i++) {
+    startBar(bars[i]);
+  }
+}
+
+/*
+get coordinates
+for each coordinate:
+  get forecasts
+  create grid (need initial forecast)
+  find corresponding coordinate row
+  add weather content to that row
+*/
+async function bindWeatherGrids() {
+  let children = document.querySelectorAll(".coordinate-row");
+  children.forEach(async child => addWeatherGrid(child));
+}
+
+async function addWeatherGrid(child) {
+  let pk = child.firstElementChild.id;
+  let response = await fetch(`/get_forecasts/${pk}/`);
+  let data = await response.json();
+  let grid = createGrid(pk, data);
+  let weatherContent = document.createElement('div');
+  weatherContent.classList.add('content');
+  weatherContent.appendChild(grid);
+  
+  let entry = document.getElementById(pk);
+  if(entry) {
+    // store progress bar so can remove later
+    let progressBar = entry.lastElementChild;
+    if (progressBar) {
+      entry.removeChild(progressBar);
+    }
+  }
+  let collapsible = child.querySelector(".collapsible");
+  collapsible.disabled = false;
+
+  entry.parentElement.appendChild(weatherContent);
+
+  // have to wait until grid is added to the DOM before adding forecasts ...
+  addForecastsToGrid(pk, data);
+}
+
+// can i just append instead of clearing and re-adding all?
+// function updateCoordinates(coordinates) {
+//   var listOfCoordinates = document.getElementById('coordinate-list');
+//   listOfCoordinates.innerHTML = '';
+
+//   // why is this async? b/c have 'await' stuff later?
+//   coordinates.forEach(async coord => {
+//     const lat = coord.latitude;
+//     const lng = coord.longitude;
+//     const pk = coord.pk;
+
+//     let coordinateEntry = document.createElement('div');
+//     coordinateEntry.id = `${pk}`;
+//     coordinateEntry.classList.add('coordinate-row');
+//     let button = document.createElement('button');
+//     button.onclick = (e) => {
+//       map.setView([lat, lng], zoomLevel);
+//       // maybe don't need to assign?
+      
+//       // this looks a bit cleaner, no?
+//       L.marker([lat,lng]).addTo(map).bindPopup(`${lat}, ${lng}`).setLatLng([lat,lng]).openPopup();
+
+//       // let popup = L.popup()
+//       //   .setLatLng([lat, lng])
+//       //   .setContent(`${lat}, ${lng}`)
+//       //   .openOn(map);
+//     };
+//     button.textContent = `${lat},${lng}`;
+//     let collapsible = document.createElement('button');
+//     collapsible.classList.add('collapsible');
+//     collapsible.textContent = '+';
+//     // NOTE: prevent double generation of table when click and unclick?
+//     // change this to block vs hidden
+//     collapsible.onclick = (e) => {
+//       // this.classList.toggle("active");
+//       var content = document.getElementById(`forecast-${pk}`);
+//       content.parentElement.style.display = content.parentElement.style.display === "block" ? "none" : "block";
+//     }
+//     let remove = document.createElement('button');
+//     remove.textContent = 'x';
+//     remove.onclick = (e) => {
+//       if (confirm("Are you sure you want to delete a coordinate?")) {
+//         fetch(`/delete/${pk}/`, {
+//           method: 'POST',
+//           headers: {
+//             'X-CSRFToken': '{{ csrf_token }}',
+//           },
+//         })
+//         .then(response => response.json())
+//         .then(data => {
+//           if (data.status === 'success') {
+//             const divToDelete = document.getElementById(`${pk}`);
+//             divToDelete.remove();
+//           }
+//           else {
+//             // NOTE: are these necessary?
+//             alert('Error deleting coordinate');
+//           }
+//         })
+//       }
+//       else {
+//         // NOTE: are these necessary?
+//         alert('Coordinate not deleted.');
+//       }
+//     }
+
+//     /*
+//     how create a grid for each coordinate?
+//     need way of identifying the element i'm updating, maybe use primary key?
+//     how does primary key work if two identical coordinates?
+//     better to create grid in the background instead of basing it on button click, right ... ?
+
+//     create grid here? 
+//     fire celery task?
+
+//     what is the sequence of operations?
+
+//     for each coordinate ...
+//     create buttons
+//     attach events to those buttons
+//     -click to go to location on map
+//     -toggle button for show/hide weather grid
+//     -delete coordinate from list
+
+//     generate weather grid
+
+//     */
+    
+//     let response = await fetch(`/get_forecasts/${pk}/`);
+//     let data = await response.json();
+//     let grid = createGrid(pk, data);
+//     let weatherContent = document.createElement('div');
+//     weatherContent.classList.add('content');
+//     weatherContent.appendChild(grid);
+//     coordinateEntry.appendChild(button)
+//     coordinateEntry.appendChild(collapsible)
+//     coordinateEntry.appendChild(remove);
+//     coordinateEntry.appendChild(weatherContent);
+//     listOfCoordinates.appendChild(coordinateEntry);
+    
+//     // have to wait until grid is added to the DOM before adding forecasts ...
+//     addForecastsToGrid(pk, data);
+//   });
+// }
 
 async function showCoordinates() {
   try {
@@ -192,6 +442,18 @@ async function showCoordinates() {
   }
 };
 
+async function createJustCoordinates() {
+  try {
+    let response = await fetch('/get_coordinates/');
+    let data = await response.json();
+    displayCoordinates(data.coordinates);
+  } 
+  catch(error) {
+    console.error('Error: ', error);
+  }
+}
+
+// NOTE: make function more readable; what exactly does this thing do?
 function createGrid(id, forecasts) {
   let grid = document.createElement('div');
   grid.classList.add('forecast-grid');
@@ -206,15 +468,20 @@ function createGrid(id, forecasts) {
   let firstIsDaytime = firstForecast['is_daytime'];
   let firstGeneratedDate = firstForecast['generated_at'];
 
-  console.log(`first generated date: ${firstGeneratedDate.toString()}`);
-
+  console.log(`***Creating grid for coordinate id=${id}***`)
+  // console.log(`first generated date: ${firstGeneratedDate.toString()}`);
+  /* 
+  why need both first-date and first-generated-at?
+  what is first-date? first date for which have forecast data
+  what is first-generated-at? generated at time for first forecast data
+  */
   grid.setAttribute('data-first-date', firstDate);
   grid.setAttribute('data-first-isdaytime', firstIsDaytime);
   grid.setAttribute('data-first-generated-at', firstGeneratedDate);
   let currentDate = new Date(firstDate);
   let timeOfDay = '';
   for(let i=0; i<8; i++) {
-    for(let j=0; j<35; j++) {
+    for(let j=0; j<27; j++) {
       let element = document.createElement('div');
       if(i == 0 && j == 0) {
         // do nothing?
@@ -233,7 +500,7 @@ function createGrid(id, forecasts) {
         day/night will be ...
         first forecast will be on j=1, so:
         -odds will be same as first forecast
-        -events will be opposite as first forecast
+        -evens will be opposite as first forecast
         */
         if(!firstIsDaytime) {
           if (j % 2 == 0) {
@@ -288,6 +555,15 @@ function addForecastsToGrid(id, forecasts) {
   })
 }
 
+function displayForecastJson(forecastJson) {
+  console.log(`generated: ${new Date(forecastJson['generated_at'])}`);
+  console.log(`date: ${new Date(forecastJson['date'])}`);
+  console.log(`is daytime: ${forecastJson['is_daytime']}`);
+  console.log(`temp: ${forecastJson['temperature']}`);
+  console.log(`wind speed: ${forecastJson['wind_speed']}`);
+  console.log(`wind direction: ${forecastJson['wind_direction']}`);
+} 
+
 /*
 how efficiently get icons from server? maybe do some cache?
 it's going to be a lot of fetch requests
@@ -305,8 +581,11 @@ function addForecastToGrid(id, forecastJson) {
 
   let targetGeneratedDate = new Date(forecastJson['generated_at']);
 
-  console.log(`firstGeneratedDate: ${firstGeneratedDate.toString()}`);
-  console.log(`targetGeneratedDate: ${targetGeneratedDate.toString()}`);
+  /*
+  why create new dates? maybe b/c attributes are stored as strings ... ?
+  */
+  // console.log(`firstGeneratedDate: ${firstGeneratedDate.toString()}`);
+  // console.log(`targetGeneratedDate: ${targetGeneratedDate.toString()}`);
 
   /*
   "generated_at" field to find the row:
@@ -323,14 +602,28 @@ function addForecastToGrid(id, forecastJson) {
   test case: first and target are the same
   should return [2, 2]
 
+  range of:
+  rows: 1-8, 1 (header) + seven days
+  columns: 1-27; 1 (header) + 14 days (initial forecast) + 12 (2 * 6) = 27?
 
   */
 
-  console.log('===adding new forecast ===');
+  // console.log('===adding new forecast ===');
+  /*
+  why need both daysBetweenForecastGeneration and numDays?
+  -forecast contains an actual date of forecast and a generated date
+  -daysBetweenForecastGeneration: compares forecast generation times,
+  this determines the grid row
+  -numDays: compares how many days between the initial forecast and the
+  target forecast, this helps calculate the grid column
+  need to convert grid attributes into Date objects so can handle 
+  date math, i.e. adding days to date
+  */
+  // console.log('=calculating generation days=')
   let daysBetweenForecastGeneration = 0;
   while(true) {
-    console.log('first date, days: ' + firstGeneratedDate.getDate());
-    console.log('generated date, date: ' + targetGeneratedDate.getDate());
+    // console.log('first date, day of month: ' + firstGeneratedDate.getDate());
+    // console.log('generated date, day of month: ' + targetGeneratedDate.getDate());
     if(firstGeneratedDate.getDate() == targetGeneratedDate.getDate()) {
       break;
     }
@@ -339,13 +632,13 @@ function addForecastToGrid(id, forecastJson) {
       daysBetweenForecastGeneration = daysBetweenForecastGeneration + 1;
     }
   }
-  console.log('daysBetweenForecastGeneration: ' + daysBetweenForecastGeneration);
+  // console.log('daysBetweenForecastGeneration: ' + daysBetweenForecastGeneration);
 
-
+  // console.log('=calculating num days=')
   let numDays = 0;
   while(true) {
-    console.log('first date, days: ' + firstDate.getDate());
-    console.log('target date, date: ' + targetDate.getDate());
+    // console.log('first date, day of month: ' + firstDate.getDate());
+    // console.log('target date, day of month: ' + targetDate.getDate());
     if(firstDate.getDate() == targetDate.getDate()) {
       break;
     }
@@ -354,29 +647,41 @@ function addForecastToGrid(id, forecastJson) {
       numDays = numDays + 1;
     }
   }
-  console.log('numDays: ' + numDays);
+  // console.log('numDays: ' + numDays);
 
   let numHalfdays = numDays * 2;
-  console.log(`first isdaytime: ${firstIsDaytime}, typeof: ${typeof(firstIsDaytime)}`);
-  console.log(`target isdaytime: ${targetIsDaytime}, typeof: ${typeof(targetIsDaytime)}`);
+  // console.log(`first isdaytime: ${firstIsDaytime}, typeof: ${typeof(firstIsDaytime)}`);
+  // console.log(`target isdaytime: ${targetIsDaytime}, typeof: ${typeof(targetIsDaytime)}`);
 
   if (firstIsDaytime === true && targetIsDaytime === false) {
-    console.log('plus one');
+    // console.log('plus one');
     numHalfdays = numHalfdays + 1;
   }
   else if(firstIsDaytime === false && targetIsDaytime === true) {
-    console.log('subtract one');
+    // console.log('subtract one');
     numHalfdays = numHalfdays - 1;
   }
 
   // forecast squares start at [2, 2]
   let row = daysBetweenForecastGeneration + 2;
   let col = numHalfdays + 2;
+
+  /*
+  range of:
+  rows: 1-8, 1 (header) + seven days
+  columns: 1-27; 1 (header) + 14 days (initial forecast) + 12 (2 * 6) = 27?
+  */
+
+  if(row > 8 || col > 27) {
+    return;
+  }
   let cell = getGridItem(id, row, col);
   if (cell.style.backgroundColor !== '') {
-    console.log('error adding forecast to grid: mapping to wrong square');
-    console.log(`row: ${row}, col: ${col}`);
-    console.log(`forecastJson: ${forecastJson}`);
+    console.log('#ERROR# adding forecast to grid: mapping to wrong square');
+    console.log(`cell background color: ${cell.style.backgroundColor}`);
+    console.log(`id: ${id}, row: ${row}, col: ${col}`);
+    displayForecastJson(forecastJson);
+    console.log('#end error#');
   }
 
   /*
@@ -391,7 +696,7 @@ function addForecastToGrid(id, forecastJson) {
   wind speed + direction
   chance of precip
   */
-  console.log(`icon url: ${forecastJson['icon_url']}`);
+  // console.log(`icon url: ${forecastJson['icon_url']}`);
 
   let icon = document.createElement('img');
   icon.setAttribute('src', forecastJson['icon_url']);
@@ -402,7 +707,7 @@ function addForecastToGrid(id, forecastJson) {
   let wind = document.createElement('div');
   wind.textContent = `${forecastJson['wind_speed'].replace(" to ", "-")} ${forecastJson['wind_direction']}`;
   let precip = document.createElement('div');
-  console.log(`type of forecastJson[precip_chance]: ${forecastJson['precip_chance']}`);
+  // console.log(`type of forecastJson[precip_chance]: ${forecastJson['precip_chance']}`);
   let chance = forecastJson['precip_chance'] === null ? 0 : forecastJson['precip_chance'];
   precip.textContent = `Precip: ${chance}%`;
   cell.innerHTML = '';
@@ -413,30 +718,18 @@ function addForecastToGrid(id, forecastJson) {
   cell.style.backgroundColor = "Aquamarine";
   cell.setAttribute('title', forecastJson['description']);
   console.log(`adding to row: ${row}, col: ${col}`);
+  console.log('~~following forecast added~~');
+  displayForecastJson(forecastJson);
+  console.log('==end adding forecast==');
 }
 
 function getGridItem(id, row, col) {
   let item = document.querySelector(`#forecast-${id} > [data-row="${row}"][data-col="${col}"]`);
-  console.log(`getGridItem return value for id ${id}, row ${row}, col ${col}: ${item}`);
+  // console.log(`getGridItem return value for id ${id}, row ${row}, col ${col}: ${item}`);
   return item;
 }
 
-function printForecastJson(forecastJson) {
-  let element = document.getElementById('forecast-json');
-  let jsonStr = JSON.stringify(forecastJson);
-  let oldContent = element.innerHTML
-  element.innerHTML = oldContent + '<br>' + jsonStr;
-}
-
-function printUIFriendlyForecast(forecastJson) {
-  let forecastDiv = document.getElementById('forecast-json');
-  let time = forecastJson['is_daytime'];
-  let date = new Date(forecastJson['date']).toLocaleString();
-  let genAt = new Date(forecastJson['generated_at']).toLocaleString();
-  let oldContent = element.textContent;
-  forecastDiv.textContent = oldContent + '\n' + `${date}; daytime? ${time}; created: ${genAt}`;
-}
-
+// NOTE: move this into template ...?
 function setupSearchBar() {
   const searchInput = document.getElementById('search-input');
   const optionsContainer = document.getElementById('options-container');
@@ -481,5 +774,114 @@ function setupSearchBar() {
   });
 }
 
-showCoordinates();
-setupSearchBar();
+// NOTE: maybe change so it adds all event handlers for a coordinate row at once given a certan id, maybe pk?
+function setupEventHandlers() {
+  let expandAll = document.getElementById('expand');
+  expandAll.addEventListener('click', (e) => {
+    let rows = document.querySelectorAll(".coordinate-row");
+    rows.forEach(row => {
+      let grid = row.querySelector(".content");
+      grid.style.display = "block";
+    });
+  });
+  
+  let collapseAll = document.getElementById('collapse');
+  collapseAll.addEventListener('click', (e) => {
+    let rows = document.querySelectorAll(".coordinate-row");
+    rows.forEach(row => {
+      let grid = row.querySelector(".content");
+      grid.style.display = "none";
+    });
+  });
+
+  let mapViews = document.querySelectorAll('.coordinate');
+  mapViews.forEach((button) => button.addEventListener('click', (e) => {
+    let lat = button.getAttribute('data-lat');
+    let lng = button.getAttribute('data-lng');
+    map.setView([lat, lng], zoomLevel);
+    // maybe don't need to assign?
+    
+    // this looks a bit cleaner, no?
+    L.marker([lat,lng]).addTo(map).bindPopup(`${lat}, ${lng}`).setLatLng([lat,lng]).openPopup();
+
+    // let popup = L.popup()
+    //   .setLatLng([lat, lng])
+    //   .setContent(`${lat}, ${lng}`)
+    //   .openOn(map);
+  }));
+
+  collapsibles = document.querySelectorAll(".collapsible");
+  collapsibles.forEach((button) => button.addEventListener('click', (e) => {
+    // this.classList.toggle("active");
+
+    // NOTE: add better error-checking, encode id in each element?
+    let pk = button.parentElement.id;
+    var content = document.getElementById(`forecast-${pk}`);
+    content.parentElement.style.display = content.parentElement.style.display === "block" ? "none" : "block";
+  }));
+
+  let csrftoken = getCookie('csrftoken');
+  removeButtons = document.querySelectorAll(".remove");
+  removeButtons.forEach((button) => button.addEventListener('click', (e) => {
+    let pk = button.parentElement.id;
+    if (confirm("Are you sure you want to delete a coordinate?")) {
+      fetch(`/delete/${pk}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrftoken,
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          const divToDelete = document.getElementById(pk);
+          // NOTE: change this back to deleting coordinate-row later
+          divToDelete.parentElement.remove();
+        }
+        else {
+          // NOTE: are these necessary?
+          alert('Error deleting coordinate');
+        }
+      })
+    }
+    else {
+      // NOTE: are these necessary?
+      alert('Coordinate not deleted.');
+    }
+  }));
+}
+
+// NOTE: make name better
+function changeSearchView() {
+  // separate into a different function?
+  document.getElementById('search-form').addEventListener('submit', (e) => {
+    // NOTE: why prevent default?
+    e.preventDefault(); 
+    const query = document.getElementById('search-input').value.trim();
+    fetch(`/search/?q=${encodeURIComponent(query)}`)
+      .then(response => response.json())
+      .then(data => {
+        if(data.latitude && data.longitude) {
+          map.setView([data.latitude, data.longitude], zoomLevel);
+          L.marker([data.latitude, data.longitude]).addTo(map)
+        }
+        else {
+          alert('Location not found!')
+        }
+      })
+      .catch(error => {
+        alert (`Cannot parse: ${query}`);
+      })
+  });
+}
+
+// NOTE: only add event handlers after DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+  setupEventHandlers();
+  startProgressBars();
+  setupSearchBar();
+  changeSearchView();
+});
+// showCoordinates();
+// createJustCoordinates().then(bindWeatherGrids);
+bindWeatherGrids();

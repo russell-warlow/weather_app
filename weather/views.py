@@ -11,23 +11,51 @@ from .serializers import ForecastSerializer, PeakSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from django.views.decorators.http import require_POST
-import random
+from django.views.decorators.csrf import ensure_csrf_cookie
 from weather_app.config import CONTACT_EMAIL
 
 
+@ensure_csrf_cookie
 def map_view(request):
-    return render(request, "weather/map.html")
+    # records = Coordinate.objects.all()
+    # coordinates = [
+    #     {"latitude": i.latitude, "longitude": i.longitude, "pk": i.pk}
+    #     for i in records
+    # ]
+    coordinates = {}
+    # maybe check if user is logged in, if so then pull from that
+    # if not then pull from session?
+    if request.user.is_authenticated:
+        # preserve order?
+        coordinates = Coordinate.objects.filter(user=request.user).order_by(
+            "date_created"
+        )
+    else:
+        # how pull from session?
+        # maybe update the session key in add_coordinate
+        coordinates = Coordinate.objects.filter(
+            session_key=request.session.session_key
+        ).order_by("date_created")
+
+    context = {
+        "coordinates": [
+            {"latitude": c.latitude, "longitude": c.longitude, "pk": c.pk}
+            for c in coordinates
+        ],
+    }
+
+    return render(request, "weather/map.html", context=context)
 
 
-# might need to remove this decorator in production
-@csrf_exempt
+@require_POST
 def add_coordinate(request):
-    if request.method == "POST":
+    try:
         data = json.loads(request.body)
         lat = data.get("latitude")
         lng = data.get("longitude")
 
         if request.user.is_authenticated:
+            # prevent adding duplicate coordinates
             coord, created = Coordinate.objects.get_or_create(
                 latitude=lat, longitude=lng, user=request.user
             )
@@ -41,90 +69,81 @@ def add_coordinate(request):
             coord, created = Coordinate.objects.get_or_create(
                 latitude=lat, longitude=lng, session_key=session_key
             )
-            coordinates = Coordinate.objects.filter(session_key=session_key)
-
-        # maybe separate into two different endpoints, so one for adding and one for getting?
-        # doing too many things on this endpoint, POST request that also returns stuff?
-        coordinates = [
-            {"latitude": i.latitude, "longitude": i.longitude, "pk": i.pk}
-            for i in coordinates
-        ]
-        return JsonResponse({"coordinates": coordinates})
-    return JsonResponse({"error": "Invalid request method"}, status=400)
-
-
-def get_coordinates(request):
-    pass
-    # if request.method == "POST":
-    #     data = json.loads(request.body)
-    #     lat = data.get("latitude")
-    #     lng = data.get("longitude")
-
-    #     if request.user.is_authenticated:
-    #         coord, created = Coordinate.objects.get_or_create(
-    #             latitude=lat, longitude=lng, user=request.user
-    #         )
-    #         # say can't add duplicate coordinates? or handle it at the db level?
-    #         coordinates = Coordinate.objects.filter(user=request.user)
-    #     else:
-    #         session_key = request.session.session_key
-    #         if not session_key:
-    #             request.session.create()
-    #             session_key = request.session.session_key
-    #         coord, created = Coordinate.objects.get_or_create(
-    #             latitude=lat, longitude=lng, session_key=session_key
-    #         )
-    #         coordinates = Coordinate.objects.filter(session_key=session_key)
-
-    #     # maybe separate into two different endpoints, so one for adding and one for getting?
-    #     # doing too many things on this endpoint, POST request that also returns stuff?
-    #     coordinates = [
-    #         {"latitude": i.latitude, "longitude": i.longitude, "pk": i.pk}
-    #         for i in coordinates
-    #     ]
-    #     return JsonResponse({"coordinates": coordinates})
-    # return JsonResponse({"error": "Invalid request method"}, status=400)
+        if created:
+            return JsonResponse(
+                {
+                    "message": "Coordinate added successfully",
+                    "coordinate": {
+                        "latitude": coord.latitude,
+                        "longitude": coord.longitude,
+                        "pk": coord.pk,
+                    },
+                    "created": created,
+                }
+            )
+        else:
+            return JsonResponse(
+                {
+                    "error:": "cannot create duplicate coordinate entry",
+                },
+                status=409,
+            )
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
 
 
+@require_POST
 def add_forecast(request):
-    if request.method == "GET":
-        lat = request.GET.get("lat")
-        lng = request.GET.get("lng")
-        api_url_noaa = f"https://api.weather.gov/points/{lat},{lng}"
-        headers = {"User-Agent": f"WeatherTrackingApp/1.0 ${CONTACT_EMAIL}"}
+    data = json.loads(request.body)
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+    api_url_noaa = f"https://api.weather.gov/points/{lat},{lng}"
+    headers = {"User-Agent": f"WeatherTrackingApp/1.0 ${CONTACT_EMAIL}"}
 
-        try:
-            response = requests.get(api_url_noaa, headers=headers)
-            data = response.json()
+    try:
+        response = requests.get(api_url_noaa, headers=headers)
+        data = response.json()
+        forecast_url = data["properties"]["forecast"]
 
-            forecast_url = data["properties"]["forecast"]
-            response = requests.get(forecast_url, headers=headers)
-            data = response.json()
+        # # NOTE: better way to handle checking for various fields in API responses?
+        # if "properties" in data:
+        #     forecast_url = data["properties"]["forecast"]
+        # else:
+        #     logging.debug("Missing 'properties' key in the data.")
+        #     return JsonResponse({"error": 'Missing "properties" in the response.'})
 
-            generate_time = datetime.fromisoformat(data["properties"]["generatedAt"])
-            elev = data["properties"]["elevation"]["value"]
-            forecast_periods = data["properties"]["periods"]
-            parsed_data = []
-            for period in forecast_periods:
-                new_forecast = Forecast.objects.create(
-                    coordinate=Coordinate.objects.get(latitude=lat, longitude=lng),
-                    generated_at=generate_time,
-                    elevation=elev,
-                    date=datetime.fromisoformat(period["startTime"]),
-                    is_daytime=period["isDaytime"],
-                    temperature=period["temperature"],
-                    wind_speed=period["windSpeed"],
-                    wind_direction=period["windDirection"],
-                    precip_chance=period["probabilityOfPrecipitation"]["value"],
-                    # relative_humidity=period["relativeHumidity"]["value"],
-                    description=period["detailedForecast"],
-                    icon_url="https://api.weather.gov" + period["icon"],
-                )
-                parsed_data.append(new_forecast)
-            serializer = ForecastSerializer(parsed_data, many=True)
-            return JsonResponse(serializer.data, safe=False)
-        except requests.RequestException as e:
-            return JsonResponse({"error": str(e)}, status=500)
+        response = requests.get(forecast_url, headers=headers)
+        data = response.json()
+
+        generate_time = datetime.fromisoformat(data["properties"]["generatedAt"])
+        elev = data["properties"]["elevation"]["value"]
+        forecast_periods = data["properties"]["periods"]
+        parsed_data = []
+        for period in forecast_periods:
+            new_forecast = Forecast.objects.create(
+                coordinate=Coordinate.objects.get(latitude=lat, longitude=lng),
+                generated_at=generate_time,
+                elevation=elev,
+                date=datetime.fromisoformat(period["startTime"]),
+                is_daytime=period["isDaytime"],
+                temperature=period["temperature"],
+                wind_speed=period["windSpeed"],
+                wind_direction=period["windDirection"],
+                precip_chance=period["probabilityOfPrecipitation"]["value"],
+                # relative_humidity=period["relativeHumidity"]["value"],
+                description=period["detailedForecast"],
+                icon_url=period["icon"],
+            )
+            parsed_data.append(new_forecast)
+        serializer = ForecastSerializer(parsed_data, many=True)
+        return JsonResponse(
+            {
+                "message": "Retrieved weather successfully",
+                "forecasts": serializer.data,
+            }
+        )
+    except requests.RequestException as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 """
@@ -157,7 +176,6 @@ def search(request):
 
 
 @require_POST
-@csrf_exempt
 def delete_coordinate(request, pk):
     try:
         coordinate = Coordinate.objects.get(pk=pk)

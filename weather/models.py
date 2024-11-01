@@ -14,14 +14,17 @@ class Coordinate(models.Model):
     session_key = models.CharField(max_length=40, null=True, blank=True)
     latitude = models.FloatField()
     longitude = models.FloatField()
+    # maybe remove null constraint later?
+    date_created = models.DateTimeField(null=True)
+    name = models.CharField(max_length=50, null=True)
 
     def __str__(self):
-        return f"{self.latitude: .8f}, {self.longitude: .8f}, User: {self.user}, Session: {self.session_key}"
+        return f"{self.latitude: .8f}, {self.longitude: .8f}, Name: {self.name}, User: {self.user}, Session: {self.session_key}"
 
     class Meta:
         ## need figure out why ordering doesn't work?
         # ordering = ["latitute", "longitude"]
-        unique_together = ["user", "latitude", "longitude"]
+        unique_together = ["user", "session_key", "latitude", "longitude"]
 
 
 class Peak(models.Model):
@@ -45,21 +48,24 @@ class Forecast(models.Model):
     wind_speed = models.CharField(max_length=20)
     wind_direction = models.CharField(max_length=5)
     precip_chance = models.IntegerField(null=True)
+    # NOTE: can delete relative_humidity b/c not sure it's supported anymore ...?
     relative_humidity = models.IntegerField(null=True)
     description = models.CharField()
     icon_url = models.URLField(null=True, blank=True)
 
     class Meta:
-        ordering = ["generated_at", "coordinate", "date"]
+        ordering = ["coordinate", "generated_at", "date"]
 
     def __str__(self):
         return (
-            "created: "
-            + self.generated_at.strftime("%m/%d/%Y, %H:%M:%S")
-            + "; ["
+            "["
             + f"{self.coordinate.latitude: .2f}"
             + ", "
             + f"{self.coordinate.longitude: .2f}"
-            + "]; start at: "
+            + "], created: "
+            + self.generated_at.strftime("%m/%d/%Y, %H:%M:%S")
+            + "; for date: "
             + self.date.strftime("%m/%d/%Y %H:%M:%S")
+            + "; url: "
+            + self.icon_url
         )
