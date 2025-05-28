@@ -192,10 +192,8 @@ def delete_coordinate(request, pk):
 def get_forecasts(request, pk):
     try:
         # maybe can rely on pre-defined ordering of forecasts, so don't need order_by in queryset?
-        forecasts = (
-            Forecast.objects.filter(coordinate__pk=pk)
-            .order_by("generated_at")
-            .order_by("date")
+        forecasts = Forecast.objects.filter(coordinate__pk=pk).order_by(
+            "generated_at", "date"
         )
         serializer = ForecastSerializer(forecasts, many=True)
         return JsonResponse(serializer.data, safe=False)

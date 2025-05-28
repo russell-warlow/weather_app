@@ -1,5 +1,7 @@
 // put it all in DOMContentLoaded eventlistener?
 
+let mapLog = [];
+
 const zoomLevel = 13;
 
 let map = L.map('map', {
@@ -28,18 +30,10 @@ function onMapClick(mapEvent) {
 
   document.getElementById('add-coordinate-form').addEventListener('submit', async function(submitEvent) {
     submitEvent.preventDefault();
-    let newEntry = await addCoordinateNew(lat, lng, csrftoken);
+    let newEntry = await addNewCoordinate(lat, lng, csrftoken);
     await addFirstForecast(lat, lng, csrftoken);
     addWeatherGrid(newEntry);
   });
-}
-
-async function doNext(lat, lng, csrftoken) {
-  // get most recently added coordinate and bind the weather, make it into a promise so can run asynchronously
-  // also pass in the csrf stuff
-  // let newEntry = document.getElementById('coordinate-list').lastElementChild;
-  let newEntry = await addFirstForecast(lat, lng, csrftoken)
-  addWeatherGrid(newEntry);
 }
 
 function getCookie(name) {
@@ -68,14 +62,9 @@ function createMenu(lat, lng, csrftoken) {
     </form>
     `;
   return formHtml;
-
-  // /* old */
-  // return `Latitude: ${lat} 
-  //         '<br>Longitude: ${lng} 
-  //         '<br><button onclick="addCoordinateNew(${lat}, ${lng})">Add to List</button>`;
 }
 
-async function addCoordinateNew(lat, lng, csrftoken) {
+async function addNewCoordinate(lat, lng, csrftoken) {
   var entry;
 
   const response = await fetch('/add_coordinate/', {
@@ -89,58 +78,7 @@ async function addCoordinateNew(lat, lng, csrftoken) {
   if(!response.ok) throw new Error ('failed to add new coordinate');
   let json = await response.json();
   return createEntry(json.coordinate, csrftoken);
-  // .then(response => {
-  //   console.log('response: ' + response);
-  //   return response.json();
-  // })
-  // .then(data => {
-  //   console.log('data: ' + data);
-  //   if(data.error) {
-  //     console.error(data.error);
-  //   } 
-  //   else {
-  //     console.log(data.message);
-  //     if(!data.created) {
-  //       // NOTE: change this to show popup dialog instead
-  //       console.log("could not add coordinate");
-  //     }
-  //     entry = createEntry(data.coordinate);
-      
-  //   }
-  // })
-  // return entry;
 }
-
-// async function add(lat, lng) {
-//   try {
-//     let response = await addCoordinate(lat, lng);
-//     let data = await response.json();
-
-//     let response2 = await addForecast(lat, lng);
-//     let data2 = await response2.json();
-    
-//     // NOTE: kind of a hack, make this cleaner
-//     if (data2.length != 14) {
-//       throw Error('issue with API, unable to fetch forecasts')
-//     }
-
-//     updateCoordinates(data.coordinates);
-//   } 
-//   catch(error) {
-//     console.error('Error: ', error);
-//   }
-// }
-
-// async function addCoordinate(lat, lng) {
-//   return fetch('/add_coordinate/', {
-//     method: 'POST',
-//     headers: {
-//       'Content-Type': 'application/json',
-//       'X-CSRFToken': '{{ csrf_token }}',
-//     },
-//     body: JSON.stringify({ latitude: lat, longitude: lng})
-//   })
-// }
 
 async function addFirstForecast(lat, lng, csrftoken) {
   let response = await fetch(`/add_forecast/`, {
@@ -155,13 +93,6 @@ async function addFirstForecast(lat, lng, csrftoken) {
   if (!response.ok) throw new Error('failed to add initial forecast');
   let data = await response.json();
   return data;
-}
-
-// should this also be a POST request?
-// is this even used anymore?
-async function addForecast(lat, lng) {
-  const url = `/add_forecast/?lat=${lat}&lng=${lng}`;
-  return fetch(url);
 }
 
 function displayCoordinates(coordinates) {
@@ -294,12 +225,28 @@ for each coordinate:
   create grid (need initial forecast)
   find corresponding coordinate row
   add weather content to that row
+
+-> bindWeatherGrids
+  -> addWeatherGrid(s)
+    -> createGrid
+    -> addForecastsToGrid
+
 */
 async function bindWeatherGrids() {
   let children = document.querySelectorAll(".coordinate-row");
-  children.forEach(async child => addWeatherGrid(child));
+  // children.forEach(async child => addWeatherGrid(child));
+  // **NOTE: the following 'await' keyword is incredibly important
+  // await addWeatherGrid(children[0]);
+  for(const child of children) {
+    await addWeatherGrid(child);
+  }
+  // children.forEach(child => await addWeatherGrid(child));
 }
 
+/*
+create grid and all the grid properties it entails
+create row of grid elements (clickable gps coordinate, expand/collapse button, remove entry)
+*/
 async function addWeatherGrid(child) {
   let pk = child.firstElementChild.id;
   let response = await fetch(`/get_forecasts/${pk}/`);
@@ -311,7 +258,7 @@ async function addWeatherGrid(child) {
   
   let entry = document.getElementById(pk);
   if(entry) {
-    // store progress bar so can remove later
+    // store progress bar so can remove later <-- NOTE: huh?! what does this comment even mean?
     let progressBar = entry.lastElementChild;
     if (progressBar) {
       entry.removeChild(progressBar);
@@ -326,134 +273,29 @@ async function addWeatherGrid(child) {
   addForecastsToGrid(pk, data);
 }
 
-// can i just append instead of clearing and re-adding all?
-// function updateCoordinates(coordinates) {
-//   var listOfCoordinates = document.getElementById('coordinate-list');
-//   listOfCoordinates.innerHTML = '';
-
-//   // why is this async? b/c have 'await' stuff later?
-//   coordinates.forEach(async coord => {
-//     const lat = coord.latitude;
-//     const lng = coord.longitude;
-//     const pk = coord.pk;
-
-//     let coordinateEntry = document.createElement('div');
-//     coordinateEntry.id = `${pk}`;
-//     coordinateEntry.classList.add('coordinate-row');
-//     let button = document.createElement('button');
-//     button.onclick = (e) => {
-//       map.setView([lat, lng], zoomLevel);
-//       // maybe don't need to assign?
-      
-//       // this looks a bit cleaner, no?
-//       L.marker([lat,lng]).addTo(map).bindPopup(`${lat}, ${lng}`).setLatLng([lat,lng]).openPopup();
-
-//       // let popup = L.popup()
-//       //   .setLatLng([lat, lng])
-//       //   .setContent(`${lat}, ${lng}`)
-//       //   .openOn(map);
-//     };
-//     button.textContent = `${lat},${lng}`;
-//     let collapsible = document.createElement('button');
-//     collapsible.classList.add('collapsible');
-//     collapsible.textContent = '+';
-//     // NOTE: prevent double generation of table when click and unclick?
-//     // change this to block vs hidden
-//     collapsible.onclick = (e) => {
-//       // this.classList.toggle("active");
-//       var content = document.getElementById(`forecast-${pk}`);
-//       content.parentElement.style.display = content.parentElement.style.display === "block" ? "none" : "block";
-//     }
-//     let remove = document.createElement('button');
-//     remove.textContent = 'x';
-//     remove.onclick = (e) => {
-//       if (confirm("Are you sure you want to delete a coordinate?")) {
-//         fetch(`/delete/${pk}/`, {
-//           method: 'POST',
-//           headers: {
-//             'X-CSRFToken': '{{ csrf_token }}',
-//           },
-//         })
-//         .then(response => response.json())
-//         .then(data => {
-//           if (data.status === 'success') {
-//             const divToDelete = document.getElementById(`${pk}`);
-//             divToDelete.remove();
-//           }
-//           else {
-//             // NOTE: are these necessary?
-//             alert('Error deleting coordinate');
-//           }
-//         })
-//       }
-//       else {
-//         // NOTE: are these necessary?
-//         alert('Coordinate not deleted.');
-//       }
-//     }
-
-//     /*
-//     how create a grid for each coordinate?
-//     need way of identifying the element i'm updating, maybe use primary key?
-//     how does primary key work if two identical coordinates?
-//     better to create grid in the background instead of basing it on button click, right ... ?
-
-//     create grid here? 
-//     fire celery task?
-
-//     what is the sequence of operations?
-
-//     for each coordinate ...
-//     create buttons
-//     attach events to those buttons
-//     -click to go to location on map
-//     -toggle button for show/hide weather grid
-//     -delete coordinate from list
-
-//     generate weather grid
-
-//     */
-    
-//     let response = await fetch(`/get_forecasts/${pk}/`);
-//     let data = await response.json();
-//     let grid = createGrid(pk, data);
-//     let weatherContent = document.createElement('div');
-//     weatherContent.classList.add('content');
-//     weatherContent.appendChild(grid);
-//     coordinateEntry.appendChild(button)
-//     coordinateEntry.appendChild(collapsible)
-//     coordinateEntry.appendChild(remove);
-//     coordinateEntry.appendChild(weatherContent);
-//     listOfCoordinates.appendChild(coordinateEntry);
-    
-//     // have to wait until grid is added to the DOM before adding forecasts ...
-//     addForecastsToGrid(pk, data);
-//   });
-// }
-
-async function showCoordinates() {
-  try {
-    let response = await fetch('/get_coordinates/');
-    let data = await response.json();
-    updateCoordinates(data.coordinates);
-  } 
-  catch(error) {
-    console.error('Error: ', error);
-  }
-};
-
-async function createJustCoordinates() {
-  try {
-    let response = await fetch('/get_coordinates/');
-    let data = await response.json();
-    displayCoordinates(data.coordinates);
-  } 
-  catch(error) {
-    console.error('Error: ', error);
-  }
-}
-
 // NOTE: make function more readable; what exactly does this thing do?
+/*
+create a grid div element, add some basic attributes
+get first forecast
+set first forecast attributes on grid
+create cells of grid (empty ones + row and column headers)
+set attributes for these cells
+return the grid
+
+alternative solution:
+create empty grid
+add row + column labels
+
+have a function for calculating number of half days between two dates
+then a function for calculating grid row and column given a start date and target date
+
+better to have a data structure in the background mapping coordinate (or id?) to first forecast and first generated date?
+this might be a better solution because can generate a report instead of using maplog everywhere?
+
+jest or mocha or qunit or vitest for javascript testing framework?
+
+*/
+
 function createGrid(id, forecasts) {
   let grid = document.createElement('div');
   grid.classList.add('forecast-grid');
@@ -468,6 +310,8 @@ function createGrid(id, forecasts) {
   let firstIsDaytime = firstForecast['is_daytime'];
   let firstGeneratedDate = firstForecast['generated_at'];
 
+  mapLog.push(`grid firstGeneratedDate: ${new Date(firstGeneratedDate).toUTCString()}, firstDate: ${new Date(firstDate).toUTCString()}, firstDate isdaytime: ${firstIsDaytime}`);
+
   console.log(`***Creating grid for coordinate id=${id}***`)
   // console.log(`first generated date: ${firstGeneratedDate.toString()}`);
   /* 
@@ -480,12 +324,18 @@ function createGrid(id, forecasts) {
   grid.setAttribute('data-first-generated-at', firstGeneratedDate);
   let currentDate = new Date(firstDate);
   let timeOfDay = '';
+  /*
+  why i<8 and j<27?
+  i: trying to store a week's worth of weather data (7) and +1 for header so 8
+  j: a week's worth is weather data is 14 forecasts (7 days + 7 nights), then each subsequent day need 2 more so 14+(6*2)=26, then +1 for header so 27
+  */
   for(let i=0; i<8; i++) {
     for(let j=0; j<27; j++) {
       let element = document.createElement('div');
       if(i == 0 && j == 0) {
         // do nothing?
       }
+      // setup column headers
       else if (i == 0 && j > 0) {
         /*
         date will be ... 
@@ -502,28 +352,37 @@ function createGrid(id, forecasts) {
         -odds will be same as first forecast
         -evens will be opposite as first forecast
         */
+
+        // if first forecast is night time, then new days will be on even columns
         if(!firstIsDaytime) {
           if (j % 2 == 0) {
             currentDate.setDate(currentDate.getDate() + 1);
           }
         }
+        // else first forecast is day time, so new days will be on odd columns
         else {
+          // don't want to re-increment the first date so skip it
           if (j > 1 && j % 2 == 1) {
             currentDate.setDate(currentDate.getDate() + 1);
           }
         }
-
+        
+        // NOTE: find better way to write this, kind of confusing atm
+        // if j is odd, then time of day is same as first forecast's time of day
         if(j % 2 == 1) {
           timeOfDay = firstIsDaytime ? '' : 'night';
         }
+        // if j is even, then time of day is opposite of first forecasts's time of day
         else {
           timeOfDay = !firstIsDaytime ? '' : 'night';
         }
         element.textContent = `${currentDate.toDateString()} ${timeOfDay}`;
       }
+      // setup row headers
       // calculate day of week name or just use numerical dates?
       else if (i > 0 && j == 0) {
-        let nextForecastDate = new Date(firstDate);
+        // should this be firstDate or firstGeneratedDate?
+        let nextForecastDate = new Date(firstGeneratedDate);
         nextForecastDate.setDate(nextForecastDate.getDate() + i - 1);
         element.textContent = nextForecastDate.toDateString();
       }
@@ -556,8 +415,9 @@ function addForecastsToGrid(id, forecasts) {
 }
 
 function displayForecastJson(forecastJson) {
-  console.log(`generated: ${new Date(forecastJson['generated_at'])}`);
-  console.log(`date: ${new Date(forecastJson['date'])}`);
+  // NOTE: why not use toUTCTime() ?
+  console.log(`generated: ${new Date(forecastJson['generated_at']).toUTCString()}`);
+  console.log(`for date: ${new Date(forecastJson['date']).toUTCString()}`);
   console.log(`is daytime: ${forecastJson['is_daytime']}`);
   console.log(`temp: ${forecastJson['temperature']}`);
   console.log(`wind speed: ${forecastJson['wind_speed']}`);
@@ -569,6 +429,9 @@ how efficiently get icons from server? maybe do some cache?
 it's going to be a lot of fetch requests
 
 how map the date to the row + column of the grid?
+
+what's the difference between firstDate and firstGeneratedDate?
+
 */
 function addForecastToGrid(id, forecastJson) {
   let grid = document.getElementById(`forecast-${id}`);
@@ -578,7 +441,6 @@ function addForecastToGrid(id, forecastJson) {
 
   let targetDate = new Date(forecastJson['date']);
   let targetIsDaytime = forecastJson['is_daytime'];
-
   let targetGeneratedDate = new Date(forecastJson['generated_at']);
 
   /*
@@ -595,9 +457,18 @@ function addForecastToGrid(id, forecastJson) {
   "date" field to find the column:
   isDaytime trickery
 
+  goal is trying to count the number of half-days periods
   if both are day or both are night, then it's easy
-  if first is night, target is day then -1 ?
-  if first is day, target is night then +1 ?
+  if first is day and target is night, then # halfdays +1 ?
+  if first is night and target is day, then # halfdays -1 ?
+
+  start date: 1/1 day
+  target date: 1/2 night
+  target date: 1/1 night
+
+  start date: 1/1 night
+  target date: 1/2 day
+  target date: 1/3 day
 
   test case: first and target are the same
   should return [2, 2]
@@ -619,8 +490,14 @@ function addForecastToGrid(id, forecastJson) {
   need to convert grid attributes into Date objects so can handle 
   date math, i.e. adding days to date
   */
+
+  // The getDate() method of Date instances returns the day of the month for this date according to local time.
+
+  /*
+  // trying to determine the row ...
   // console.log('=calculating generation days=')
   let daysBetweenForecastGeneration = 0;
+  // NOTE: why is this a while loop? why not do date arithmetic?
   while(true) {
     // console.log('first date, day of month: ' + firstGeneratedDate.getDate());
     // console.log('generated date, day of month: ' + targetGeneratedDate.getDate());
@@ -634,6 +511,7 @@ function addForecastToGrid(id, forecastJson) {
   }
   // console.log('daysBetweenForecastGeneration: ' + daysBetweenForecastGeneration);
 
+  // trying to determine the column ... 
   // console.log('=calculating num days=')
   let numDays = 0;
   while(true) {
@@ -648,33 +526,56 @@ function addForecastToGrid(id, forecastJson) {
     }
   }
   // console.log('numDays: ' + numDays);
+  */
+  let daysBetweenForecastGeneration = (targetGeneratedDate.getUTCDate() - firstGeneratedDate.getUTCDate());
+  let numDays = (targetDate.getUTCDate() - firstDate.getUTCDate());
 
   let numHalfdays = numDays * 2;
   // console.log(`first isdaytime: ${firstIsDaytime}, typeof: ${typeof(firstIsDaytime)}`);
   // console.log(`target isdaytime: ${targetIsDaytime}, typeof: ${typeof(targetIsDaytime)}`);
 
+  // if first is day and target is night
   if (firstIsDaytime === true && targetIsDaytime === false) {
     // console.log('plus one');
     numHalfdays = numHalfdays + 1;
   }
+  // if first is night and target is day
   else if(firstIsDaytime === false && targetIsDaytime === true) {
     // console.log('subtract one');
-    numHalfdays = numHalfdays - 1;
+    // NOTE: not sure if this logic works? why subtract one?
+    numHalfdays = numHalfdays + 1;
   }
 
   // forecast squares start at [2, 2]
   let row = daysBetweenForecastGeneration + 2;
   let col = numHalfdays + 2;
 
+  mapLog.push(`id: ${id}, created: ${targetGeneratedDate.toUTCString()}, target: ${targetDate.toUTCString()}, daytime: ${targetIsDaytime}, mapped to row: ${row}, col: ${col}`);
+
   /*
   range of:
   rows: 1-8, 1 (header) + seven days
   columns: 1-27; 1 (header) + 14 days (initial forecast) + 12 (2 * 6) = 27?
+
+  nobody occupies [1, 1]
+  headers occupy: [1, (2 ... n)] and [(2 ... n), 1]
+
   */
 
-  if(row > 8 || col > 27) {
+  if(row > 8 || row < 1 || col > 27 || col < 1) {
+    console.log("#ERROR# received out of range row or col")
+    console.log(`id: ${id}, row: ${row}, col: ${col}`);
+    console.log('#end error#');
     return;
   }
+
+  if (row < 2 || col < 2) {
+    console.log("#ERROR# forecast row or col occupies grid header")
+    console.log(`id: ${id}, row: ${row}, col: ${col}`);
+    console.log('#end error#');
+    return;
+  }
+
   let cell = getGridItem(id, row, col);
   if (cell.style.backgroundColor !== '') {
     console.log('#ERROR# adding forecast to grid: mapping to wrong square');
@@ -682,6 +583,7 @@ function addForecastToGrid(id, forecastJson) {
     console.log(`id: ${id}, row: ${row}, col: ${col}`);
     displayForecastJson(forecastJson);
     console.log('#end error#');
+    return;
   }
 
   /*
@@ -852,7 +754,7 @@ function setupEventHandlers() {
 }
 
 // NOTE: make name better
-function changeSearchView() {
+function setupMapSearchHandler() {
   // separate into a different function?
   document.getElementById('search-form').addEventListener('submit', (e) => {
     // NOTE: why prevent default?
@@ -880,8 +782,28 @@ document.addEventListener('DOMContentLoaded', function() {
   setupEventHandlers();
   startProgressBars();
   setupSearchBar();
-  changeSearchView();
+  setupMapSearchHandler();
 });
 // showCoordinates();
 // createJustCoordinates().then(bindWeatherGrids);
-bindWeatherGrids();
+
+// bindWeatherGrids();
+
+async function asyncFunction() {
+  await bindWeatherGrids();
+}
+
+// is this trickery for getting maplog to work?
+asyncFunction().then(() => {
+  console.log("enter async function");
+  mapLog.forEach((i) => console.log(i));
+});
+
+// let asyncFoo = new Promise((resolve, reject) => {
+//   bindWeatherGrids();
+// })
+
+// asyncFoo.then(() => {
+//   console.log("enter async function");
+//   mapLog.forEach((i) => console.log(i));
+// })

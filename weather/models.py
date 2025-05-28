@@ -59,13 +59,15 @@ class Forecast(models.Model):
     def __str__(self):
         return (
             "["
-            + f"{self.coordinate.latitude: .2f}"
+            + f"{self.coordinate.latitude: .5f}"
             + ", "
-            + f"{self.coordinate.longitude: .2f}"
+            + f"{self.coordinate.longitude: .5f}"
             + "], created: "
             + self.generated_at.strftime("%m/%d/%Y, %H:%M:%S")
             + "; for date: "
             + self.date.strftime("%m/%d/%Y %H:%M:%S")
-            + "; url: "
-            + self.icon_url
+            + "; is daytime: "
+            + str(self.is_daytime)
+            + "; Temp: "
+            + str(self.temperature)
         )

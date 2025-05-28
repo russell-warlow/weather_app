@@ -12,7 +12,7 @@ logger = get_task_logger(__name__)
 @shared_task(
     bind=True,
     max_retries=10,
-    default_retry_delay=300,
+    default_retry_delay=15,
     retry_backoff=True,
     retry_jitter=True,
 )
@@ -31,24 +31,40 @@ def fetch_weather(self):
             data = response.json()
             response.raise_for_status()
             generate_time = datetime.fromisoformat(data["properties"]["generatedAt"])
+            # NOTE: does elevation need to be here?
             elev = data["properties"]["elevation"]["value"]
             forecast_periods = data["properties"]["periods"]
             for period in forecast_periods:
-                Forecast.objects.create(
-                    coordinate=c,
-                    generated_at=generate_time,
-                    elevation=elev,
-                    date=datetime.fromisoformat(period["startTime"]),
-                    is_daytime=period["isDaytime"],
-                    temperature=period["temperature"],
-                    wind_speed=period["windSpeed"],
-                    wind_direction=period["windDirection"],
-                    precip_chance=period["probabilityOfPrecipitation"]["value"],
-                    description=period["detailedForecast"],
-                    icon_url=period["icon"],
-                )
+                # create_defaults (used for create operation):
+                # coordinate, date, generated_at
+                # NOTE: for now, assume that generated_at doesn't change in weather API; might have to change later
+                # defaults (used to update the objects):
+                # temperature, wind_speed, wind_direction, precip_change, description, icon_url
+                startTime = datetime.fromisoformat(period["startTime"])
 
-            # limit_forecast_records(c.pk, 14 * 7)
+                # assume that only one forecast is generated per day. stuff generated later in the day are ignored
+                if not Forecast.objects.filter(
+                    coordinate=c,
+                    date=startTime,
+                    generated_at__day=generate_time.day,
+                    generated_at__month=generate_time.month,
+                    generated_at__year=generate_time.year,
+                ).exists():
+                    Forecast.objects.create(
+                        coordinate=c,
+                        generated_at=generate_time,
+                        elevation=elev,
+                        date=startTime,
+                        is_daytime=period["isDaytime"],
+                        temperature=period["temperature"],
+                        wind_speed=period["windSpeed"],
+                        wind_direction=period["windDirection"],
+                        precip_chance=period["probabilityOfPrecipitation"]["value"],
+                        description=period["detailedForecast"],
+                        icon_url=period["icon"],
+                    )
+
+            delete_old_forecasts(c.pk, c.user, c.session_key)
 
         except requests.exceptions.HTTPError as exc:
             # somehow record error message in backend?
@@ -64,18 +80,48 @@ def fetch_weather(self):
         #     )
 
 
-def limit_forecast_records(pk, limit):
-    count = (
-        Forecast.objects.filter(coordinate__pk=pk)
-        .order_by("generated_at")
-        .order_by("date")
-        .count()
-    )
-    if count > limit:
-        excess = count - limit
-        old_forecasts = (
-            Forecast.objects.filter(coordinate__pk=pk)
-            .order_by("generated_at")
-            .order_by("date")[:excess]
+# for each coordinate:
+#     get the number of all the forecast records
+#     if the number is greater than the limit:
+#         order the records according to ascending, then trim the records from the start
+
+"""
+get total number of forecasts for a particular coordinate
+set limit based on whether the user is logged in or using sessions
+delete excess forecasts based on order-by
+is there an off by one error somewhere?
+"""
+
+
+def delete_old_forecasts(pk, user, session_key):
+    forecasts = Forecast.objects.filter(coordinate__pk=pk)
+    number_forecasts = forecasts.count()
+    if user:
+        limit = 6 * 14
+    elif session_key:
+        limit = 1 * 14
+    if number_forecasts > limit:
+        excess = number_forecasts - limit
+        # why need flat=True? make it so that not dealing with tuples?
+        ordered_forecasts = forecasts.order_by("generated_at", "date").values_list(
+            "pk", flat=True
         )
-        old_forecasts.delete()
+        old_forecasts = ordered_forecasts[:excess]
+        Forecast.objects.filter(id__in=old_forecasts).delete()
+
+
+# def limit_forecast_records(pk, limit):
+#     count = (
+#         Forecast.objects.filter(coordinate__pk=pk)
+#         .order_by("generated_at")
+#         .order_by("date")
+#         .count()
+#     )
+#     if count > limit:
+#         excess = count - limit
+#         old_forecasts = (
+#             Forecast.objects.filter(coordinate__pk=pk)
+#             .order_by("generated_at")
+#             .order_by("date")[:excess]
+#         )
+#         old_forecasts.delete()
