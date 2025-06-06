@@ -41,6 +41,21 @@
     <button id="expand" class="hyperlink">Expand</button>
     <button id="collapse" class="hyperlink">Collapse</button>
   </div>
+  {% comment %} <div id="coordinate-list">
+    {% for c in coordinates %}
+      <div class="coordinate-row">
+        <div id={{ c.pk }} class="coordinate-header">
+          <button class="coordinate" data-lat="{{ c.latitude }}" data-lng="{{ c.longitude }}">{{ c.latitude|join:"," }}{{ c.longitude }}</button>
+          <button class="collapsible" disabled>+</button>
+          <button class="remove">x</button>
+          <div class="progress-container">
+            <div class="progress-bar"></div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div> {% endcomment %}
+  <span>linebreak</span>
   <div id="coordinate-list">
     {% for c in coordinates %}
       <div class="coordinate-row">

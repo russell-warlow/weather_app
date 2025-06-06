@@ -243,6 +243,55 @@ async function bindWeatherGrids() {
   // children.forEach(child => await addWeatherGrid(child));
 }
 
+async function bindWeatherGrids_Test() {
+  let children = document.querySelectorAll(".coordinate-row");
+  for(const child of children) {
+    await addWeatherGrid_Test(child);
+  }
+}
+
+/*
+TO-DO: overall this function does too much, need to clean it up
+*/
+async function addWeatherGrid_Test(child) {
+  let pk = child.firstElementChild.id;
+  let response = await fetch(`/get_forecasts/${pk}/`);
+  let data = await response.json();
+  let grid = createGrid_Test(pk);
+
+  if (!data.length) {
+    console.log("no weather data");
+    return;
+  }
+  
+  let initial = data[0];
+  let firstDate = initial['date'];
+  let isDaytime = initial['is_daytime'];
+  let generatedAt = initial['generated_at'];
+  let gridPlusLabel = updateGridLabels(firstDate, isDaytime, generatedAt, grid);
+  let weatherContent = document.createElement('div');
+  weatherContent.classList.add('content');
+  weatherContent.appendChild(gridPlusLabel);
+  
+  // TO-DO: really need to clean up this code, not super clear what it does
+  let entry = document.getElementById(pk);
+  if(entry) {
+    // store progress bar so can remove later <-- NOTE: huh?! what does this comment even mean?
+    let progressBar = entry.lastElementChild;
+    if (progressBar) {
+      entry.removeChild(progressBar);
+    }
+  }
+  let collapsible = child.querySelector(".collapsible");
+  collapsible.disabled = false;
+
+  entry.parentElement.appendChild(weatherContent);
+
+  // have to wait until grid is added to the DOM before adding forecasts ...
+  // addForecastsToGrid(pk, data);
+  data.forEach(f => addForecastToGrid_Test(pk, f));
+}
+
 /*
 create grid and all the grid properties it entails
 create row of grid elements (clickable gps coordinate, expand/collapse button, remove entry)
@@ -271,6 +320,268 @@ async function addWeatherGrid(child) {
 
   // have to wait until grid is added to the DOM before adding forecasts ...
   addForecastsToGrid(pk, data);
+}
+
+/*
+better (more pure + testable) workflow for creating weather grid:
+create empty grid
+update table of earliest forecast and earliest generated date
+update labels of grid
+have function that takes forecast (generated date + first date) and returns grid id?
+*/
+
+function createGrid_Test(id) {
+  let grid = document.createElement('div');
+  grid.classList.add('forecast-grid');
+  // NOTE: is there a cleaner way to do logic such that don't always rely on various id's and hierarchy of id's?
+  grid.id = `forecast-${id}`;
+  // if (forecasts.length == 0) {
+  //   grid.textContent = 'No forecasts to display';
+  //   return grid;
+  // }
+  // NOTE: why start at one as opposed to zero?
+  // javascript indexing (and maybe css) in grids, first element is row 1 and column 1
+  for(let row=1; row<9; row++) {
+    for(let column=1; column<29; column++) {
+      let cell = document.createElement('div');
+      // NOTE: why update both style and data attribute?
+      cell.style.gridRow = row;
+      cell.style.gridColumn = column;
+      cell.setAttribute('data-row', row);
+      cell.setAttribute('data-col', column);
+      grid.appendChild(cell);
+    }
+  }
+  return grid;
+}
+
+// add css classes to grid + add day labels
+function updateGridLabels(date, isDaytime, generatedAt, grid) {
+  let firstDate = new Date(date);
+  let firstIsDaytime = isDaytime;
+  let generatedDate = new Date(generatedAt);
+  grid.setAttribute('data-date', firstDate.toISOString());
+  grid.setAttribute('data-isdaytime', firstIsDaytime);
+  grid.setAttribute('data-generated', generatedDate.toISOString());
+  for(let i=0; i<grid.children.length; i++) {
+    cell = grid.children[i];
+    if (i == 0) {
+      cell.classList.add('grid-label');
+    }
+    // setting grid column lbels
+    else if(i < 28) {
+      cell.classList.add('grid-label');
+      cell.textContent = `${firstDate.toDateString()} ${firstIsDaytime ? 'day' : 'night'}`;
+      if(!firstIsDaytime) {
+        firstDate.setDate(firstDate.getDate() + 1);
+      }
+      firstIsDaytime = !firstIsDaytime;
+    }
+    // setting grid row labels
+    else if ((i % 28) == 0) {
+      cell.classList.add('grid-label');
+      cell.textContent = generatedDate.toDateString();
+      generatedDate.setDate(generatedDate.getDate() + 1);
+    }
+    else {
+      cell.classList.add('forecast-cell');
+    }
+  }
+  return grid;
+}
+
+/*
+just work with UTC time here? or does it make more sense to use local time?
+isn't it strange to work with UTC time in rows and PST in columns?
+
+get month + year for each date
+create new dates with those months and years
+subtract to get the difference
+
+returns number of "days" between gridDate and targetDate
+i.e. how many times 12am is crossed
+
+*/
+function getRow(gridDate, targetDate) {
+  if (gridDate > targetDate) {
+    return -1;
+  }
+  let diff = dayDiff(gridDate, targetDate);
+  return diff;
+}
+
+function dayDiff(firstDate, secondDate) {
+  let date1 = new Date(firstDate);
+  let date2 = new Date(secondDate);
+
+  let standard1 = new Date(`${date1.getMonth()+1} ${date1.getDate()}, ${date1.getFullYear()}`);
+  let standard2 = new Date(`${date2.getMonth()+1} ${date2.getDate()}, ${date2.getFullYear()}`);
+  const msPerDay = (24*60*60*1000);
+  return (standard2 - standard1)/msPerDay;
+}
+
+/*
+have first date, first isDaytime, and when first forecast generated at
+given a forecast (date + isDaytime), calculate how many half days between it and the grid's first forecast
+
+maybe just use day diff and then some minor is daytime math?
+so if start is day, end is night; then has to be +1?
+start is night, end is day; then has to be +1?  
+
+
+1/1 night, 1/2 day => 1 half day; date diff 1
+1/1 night, 1/3 day => 3 half days; date diff 2
+1/1 night, 1/4 day => 5 half days; date diff 3
+
+so 2*(dateDiff)-1 is the trick
+
+===========
+
+1/1 day, 1/1 night => 1 half day; date diff: 0
+1/1 day, 1/2 night => 3 half day; date diff: 1
+1/1 day, 1/3 night => 5 half day; date diff: 2
+1/1 day, 1/4 night => 7 half day; date diff: 3
+
+base edge case is a bit different (subtle)
+
+
+
+*/
+
+// NOTE: not sure if dates here are handled as strings or actual date objects?
+function halfDaysBetween(startDate, startIsDaytime, targetDate, targetIsDaytime) {
+  if (startDate > targetDate) {
+    return -1;
+  }
+  let daysBetween = dayDiff(startDate, targetDate);
+  if(startIsDaytime && !targetIsDaytime) {
+    if(daysBetween === 0) {
+      return 1;
+    }
+    else {
+      return 2*daysBetween - 1
+    }
+  } 
+  else if (!startIsDaytime && targetIsDaytime) {
+    return 2*daysBetween - 1;
+  }
+  return daysBetween*2;
+}
+
+/*
+helper function for doing date arithmetic
+*/
+function addNDays(date, n) {
+
+}
+
+/*
+given a grid and a date + isdaytime, returns row and column id's for date+isdaytime
+maybe have to handle off by one error b/c html grid is 1-indexed
+*/
+function forecastGridCoordinates(grid, date, isDaytime, generated) {
+  let gridFirstDate = grid.getAttribute('data-date');
+  let gridFirstIsDaytime = grid.getAttribute('data-isdaytime')  === 'true';
+  let gridGenerated = grid.getAttribute('data-generated');
+
+  let row = getRow(gridGenerated, generated);
+  let column = halfDaysBetween(gridFirstDate, gridFirstIsDaytime, date, isDaytime);
+
+  // include error checking?
+  return [row, column];
+}
+
+function createForecastCell(row, column, forecastJson) {
+  let icon = document.createElement('img');
+  icon.setAttribute('src', forecastJson['icon_url']);
+  icon.setAttribute('alt', 'icon');
+  let temp = document.createElement('div');
+  let qualifier = forecastJson['is_daytime'] ? 'High' : 'Low';
+  temp.textContent = `${qualifier}: ${forecastJson['temperature']}F`;
+  let wind = document.createElement('div');
+  wind.textContent = `${forecastJson['wind_speed'].replace(" to ", "-")} ${forecastJson['wind_direction']}`;
+  let precip = document.createElement('div');
+  // console.log(`type of forecastJson[precip_chance]: ${forecastJson['precip_chance']}`);
+  let chance = forecastJson['precip_chance'] === null ? 0 : forecastJson['precip_chance'];
+  precip.textContent = `Precip: ${chance}%`;
+
+  let cell = document.createElement('div');
+  cell.classList.add('forecast-cell');
+  // NOTE: why update both style and data attribute?
+  // also maybe this code is duplicate ...?
+  cell.style.gridRow = row;
+  cell.style.gridColumn = column;
+  cell.setAttribute('data-row', row);
+  cell.setAttribute('data-col', column);
+  
+  cell.appendChild(icon);
+  cell.appendChild(temp);
+  cell.appendChild(wind);
+  cell.appendChild(precip);
+  cell.style.backgroundColor = "Aquamarine";
+  cell.setAttribute('title', forecastJson['description']);
+  return cell;
+}
+
+function updateForecastCell(id, row, column, forecastJson) {
+  // let newCell = createForecastCell(row, column, forecastJson);
+
+  let icon = document.createElement('img');
+  icon.setAttribute('src', forecastJson['icon_url']);
+  icon.setAttribute('alt', 'icon');
+  let temp = document.createElement('div');
+  let qualifier = forecastJson['is_daytime'] ? 'High' : 'Low';
+  temp.textContent = `${qualifier}: ${forecastJson['temperature']}F`;
+  let wind = document.createElement('div');
+  wind.textContent = `${forecastJson['wind_speed'].replace(" to ", "-")} ${forecastJson['wind_direction']}`;
+  let precip = document.createElement('div');
+  // console.log(`type of forecastJson[precip_chance]: ${forecastJson['precip_chance']}`);
+  let chance = forecastJson['precip_chance'] === null ? 0 : forecastJson['precip_chance'];
+  precip.textContent = `Precip: ${chance}%`;
+
+  let cell = getGridItem(id, row, column);
+  if(cell === null) {
+    throw new Error(`invalid grid item accessed. id: ${id}, row: ${row}, col: ${column}`);
+  }
+  cell.innerHTML = '';
+  // NOTE: why update both style and data attribute?
+  // also maybe this code is duplicate ...?
+  // cell.style.gridRow = row;
+  // cell.style.gridColumn = column;
+  // cell.setAttribute('data-row', row);
+  // cell.setAttribute('data-col', column);
+  
+  cell.appendChild(icon);
+  cell.appendChild(temp);
+  cell.appendChild(wind);
+  cell.appendChild(precip);
+  cell.style.backgroundColor = "Aquamarine";
+  cell.setAttribute('title', forecastJson['description']);
+  return cell;
+
+  oldCell.innerHTML = newCell.getHTML();
+}
+
+/*
+get grid 
+extract info from forecast
+get grid coordinates for forecast
+update cell
+*/
+function addForecastToGrid_Test(id, forecast) {
+  let grid = document.getElementById(`forecast-${id}`);
+  let date = forecast['date'];
+  let isDaytime = forecast['is_daytime'];
+  let generated = forecast['generated_at'];
+
+  let coordinates = forecastGridCoordinates(grid, date, isDaytime, generated);
+  // include error checking here?
+  let row = coordinates[0];
+  let column = coordinates[1];
+  if (row < 0 || row > 8 || column < 0 || column > 28) {
+    throw new Error(`invalid grid coordinate. row: ${row}, col: ${column}`);
+  }
+  updateForecastCell(id, row+2, column+2, forecast);
 }
 
 // NOTE: make function more readable; what exactly does this thing do?
@@ -790,7 +1101,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // bindWeatherGrids();
 
 async function asyncFunction() {
-  await bindWeatherGrids();
+  // await bindWeatherGrids();
+  await bindWeatherGrids_Test();
 }
 
 // is this trickery for getting maplog to work?

@@ -1,3 +1,7 @@
+:root {
+  --grid-border: 1px solid black;
+}
+
 #map { 
   height: 400px;
   margin-top: 10px;
@@ -42,16 +46,24 @@
   display: grid;
   grid-template-columns: repeat(35, 1fr);
   grid-template-rows: repeat(8, 1fr);
+  grid-gap: 1px;
+  padding: 1px;
+  /* TO-DO: fix css styling of last cell on grid (lacks right border) */
+  /* border-top: var(--grid-border);
+  border-left: var(--grid-border); */
 }
 
 .forecast-cell {
   height: 100px;
   width: 70px;
-  border: 1px solid black;
+  /* border: 1px solid black; */
   font-size: xx-small;
   display: flex;
   flex-direction: column;
   align-items: center;
+  outline: var(--grid-border);
+  /* border-right: var(--grid-border);
+  border-bottom: var(--grid-border); */
 }
 
 .forecast-cell > img {
@@ -63,8 +75,11 @@
 .grid-label {
   height: 100px;
   width: 70px;
-  border: 1px solid black;
+  /* border: 1px solid black; */
   font-size: small;
+  outline: var(--grid-border);
+  /* border-right: var(--grid-border);
+  border-bottom: var(--grid-border); */
 }
 
 .collapsible:hover {
