@@ -16,10 +16,11 @@ class Coordinate(models.Model):
     longitude = models.FloatField()
     # maybe remove null constraint later?
     date_created = models.DateTimeField(null=True)
+    time_zone = models.CharField(max_length=40, default="America/Los_Angeles")
     name = models.CharField(max_length=50, null=True)
 
     def __str__(self):
-        return f"{self.latitude: .8f}, {self.longitude: .8f}, Name: {self.name}, User: {self.user}, Session: {self.session_key}"
+        return f"{self.latitude: .8f}, {self.longitude: .8f}, TZ: {self.time_zone}, Name: {self.name}, User: {self.user}, Session: {self.session_key}"
 
     class Meta:
         ## need figure out why ordering doesn't work?
