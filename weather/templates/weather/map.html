@@ -1,4 +1,4 @@
-{% comment %} why load static? b/c leaflet? {% endcomment %}
+{% comment %} is there a way to remove the duplicate load static, i.e. put js in base.html? {% endcomment %}
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
@@ -21,6 +21,7 @@
     <div class="accounts">
       {% if user.is_authenticated %}
         <span>Welcome, {{ user.username }}!</span>
+        <a href="{% url 'dashboard' %}">Dashboard</a>
         <form id="logout-form" method="post" action="{% url 'logout' %}">
           {% csrf_token %}
           <button type="submit" class="hyperlink">Logout</button>
@@ -42,20 +43,19 @@
     <button id="collapse" class="hyperlink">Collapse</button>
   </div>
   {% comment %} <div id="coordinate-list">
-    {% for c in coordinates %}
-      <div class="coordinate-row">
-        <div id={{ c.pk }} class="coordinate-header">
-          <button class="coordinate" data-lat="{{ c.latitude }}" data-lng="{{ c.longitude }}">{{ c.latitude|join:"," }}{{ c.longitude }}</button>
-          <button class="collapsible" disabled>+</button>
-          <button class="remove">x</button>
-          <div class="progress-container">
-            <div class="progress-bar"></div>
-          </div>
-        </div>
+{% for c in coordinates %}
+  <div class="coordinate-row">
+    <div id={{ c.pk }} class="coordinate-header">
+      <button class="coordinate" data-lat="{{ c.latitude }}" data-lng="{{ c.longitude }}">{{ c.latitude|join:"," }}{{ c.longitude }}</button>
+      <button class="collapsible" disabled>+</button>
+      <button class="remove">x</button>
+      <div class="progress-container">
+        <div class="progress-bar"></div>
       </div>
-    {% endfor %}
+    </div>
+  </div>
+{% endfor %}
   </div> {% endcomment %}
-  <span>linebreak</span>
   <div id="coordinate-list">
     {% for c in coordinates %}
       <div class="coordinate-row">
@@ -75,5 +75,5 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin=""></script>
-  <script src="{% static 'weather/js/main.js' %}"></script>
+  <script type="module" src="{% static 'weather/js/main.js' %}"></script>
 </body>

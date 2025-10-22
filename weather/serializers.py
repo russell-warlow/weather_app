@@ -27,6 +27,7 @@ class ForecastSerializer(serializers.ModelSerializer):
             "id",
             "coordinate",
             "generated_at",
+            "time_zone",
             "elevation",
             "date",
             "is_daytime",
@@ -34,7 +35,6 @@ class ForecastSerializer(serializers.ModelSerializer):
             "wind_speed",
             "wind_direction",
             "precip_chance",
-            "relative_humidity",
             "description",
             "icon_url",
         ]
