@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!-- NOTE: this needs to be updated later -->
+<html lang="en">
+  <head>
+    <meta name="keywords" />
+    <meta name="description" />
+    <title>
+      {% block title %}
+      {% endblock title %}
+    </title>
+  </head>
+  <body>
+    <div id="header">
+      <span class="user">
+        {% if request.user.is_authenticated %}
+          Hello {{ request.user.first_name|default:request.user.username }}!
+          <a href="{% url 'dashboard' %}">Dashboard</a>
+          <a href="{% url "logout" %}">Logout</a>
+        {% else %}
+          <a href="{% url "login" %}">Log-in</a>
+        {% endif %}
+      </span>
+    </div>
+    <div id="content">
+      {% block content %}
+      {% endblock content %}
+    </div>
+  </body>
+</html>

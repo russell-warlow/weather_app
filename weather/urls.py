@@ -9,6 +9,9 @@ from .views import (
     get_coordinates,
     get_forecasts,
     get_peaks,
+    register,
+    edit,
+    dashboard,
 )
 
 urlpatterns = [
@@ -20,6 +23,9 @@ urlpatterns = [
     path("get_coordinates/", get_coordinates, name="get_coordinates"),
     path("get_forecasts/<int:pk>/", get_forecasts, name="get_forecasts"),
     path("peaks/", get_peaks, name="get_peaks"),
-    path("accounts/", include("django.contrib.auth.urls")),
+    path("account/", include("django.contrib.auth.urls")),
+    path("register/", register, name="register"),
+    path("edit/", edit, name="edit"),
+    path("dashboard/", dashboard, name="dashboard"),
     # path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 ]

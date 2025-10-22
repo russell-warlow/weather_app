@@ -16,11 +16,10 @@ class Coordinate(models.Model):
     longitude = models.FloatField()
     # maybe remove null constraint later?
     date_created = models.DateTimeField(null=True)
-    time_zone = models.CharField(max_length=40, default="America/Los_Angeles")
     name = models.CharField(max_length=50, null=True)
 
     def __str__(self):
-        return f"{self.latitude: .8f}, {self.longitude: .8f}, TZ: {self.time_zone}, Name: {self.name}, User: {self.user}, Session: {self.session_key}"
+        return f"{self.latitude: .8f}, {self.longitude: .8f}, Name: {self.name}, User: {self.user}, Session: {self.session_key}"
 
     class Meta:
         ## need figure out why ordering doesn't work?
@@ -44,13 +43,12 @@ class Forecast(models.Model):
     generated_at = models.DateTimeField()
     elevation = models.IntegerField()
     date = models.DateTimeField()
+    time_zone = models.CharField(max_length=40, default="America/Los_Angeles")
     is_daytime = models.BooleanField()
     temperature = models.IntegerField()
     wind_speed = models.CharField(max_length=20)
     wind_direction = models.CharField(max_length=5)
     precip_chance = models.IntegerField(null=True)
-    # NOTE: can delete relative_humidity b/c not sure it's supported anymore ...?
-    relative_humidity = models.IntegerField(null=True)
     description = models.CharField()
     icon_url = models.URLField(null=True, blank=True)
 
@@ -67,8 +65,10 @@ class Forecast(models.Model):
             + self.generated_at.strftime("%m/%d/%Y, %H:%M:%S")
             + "; for date: "
             + self.date.strftime("%m/%d/%Y %H:%M:%S")
-            + "; is daytime: "
+            + "; daytime: "
             + str(self.is_daytime)
             + "; Temp: "
             + str(self.temperature)
+            + "; TZ: "
+            + str(self.time_zone)
         )

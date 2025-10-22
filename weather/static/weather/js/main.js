@@ -1,3 +1,8 @@
+import { DateTime }  from "../vendored/luxon_3.6.1.js";
+import { dayDiff, halfDaysBetween } from './date_lib.js';
+
+// const { DateTime } = require("luxon");
+
 // put it all in DOMContentLoaded eventlistener?
 
 let mapLog = [];
@@ -31,8 +36,9 @@ function onMapClick(mapEvent) {
   document.getElementById('add-coordinate-form').addEventListener('submit', async function(submitEvent) {
     submitEvent.preventDefault();
     let newEntry = await addNewCoordinate(lat, lng, csrftoken);
-    await addFirstForecast(lat, lng, csrftoken);
-    addWeatherGrid(newEntry);
+    let forecasts = await addFirstForecast(lat, lng, csrftoken);
+    // TO-DO: change it such that don't have to re-do fetch of forecasts
+    addWeatherGrid_Test(newEntry);
   });
 }
 
@@ -251,13 +257,19 @@ async function bindWeatherGrids_Test() {
 }
 
 /*
-TO-DO: overall this function does too much, need to clean it up
+TO-DO: 
+1. overall this function does too much, need to clean it up
+2. thought it'd be a good idea to overload it so can pass in forecast when initially create entry 
+(would save an endpoint query) but not sure if ordering is preserved? pretty sure it is. maybe something to change later
+
 */
 async function addWeatherGrid_Test(child) {
   let pk = child.firstElementChild.id;
   let response = await fetch(`/get_forecasts/${pk}/`);
   let data = await response.json();
   let grid = createGrid_Test(pk);
+
+  console.log('get_forecast response size, i.e. # forecasts: ' + data.length)
 
   if (!data.length) {
     console.log("no weather data");
@@ -268,7 +280,12 @@ async function addWeatherGrid_Test(child) {
   let firstDate = initial['date'];
   let isDaytime = initial['is_daytime'];
   let generatedAt = initial['generated_at'];
-  let gridPlusLabel = updateGridLabels(firstDate, isDaytime, generatedAt, grid);
+  let timeZone = initial['time_zone'];
+  // let firstDate = DateTime.fromISO(initial['date'], { zone: initial['time_zone']});
+  // let isDaytime = initial['is_daytime'];
+  // let generatedAt = DateTime.fromISO(initial['generated_at'], {zone: 'utc'});
+  // let timeZone = initial['time_zone'];
+  let gridPlusLabel = updateGridLabels(grid, firstDate, isDaytime, generatedAt, timeZone);
   let weatherContent = document.createElement('div');
   weatherContent.classList.add('content');
   weatherContent.appendChild(gridPlusLabel);
@@ -340,11 +357,12 @@ function createGrid_Test(id) {
   //   return grid;
   // }
   // NOTE: why start at one as opposed to zero?
-  // javascript indexing (and maybe css) in grids, first element is row 1 and column 1
+  // with css grid indexing, first element is row 1 and column 1
   for(let row=1; row<9; row++) {
-    for(let column=1; column<29; column++) {
+    for(let column=1; column<28; column++) {
       let cell = document.createElement('div');
       // NOTE: why update both style and data attribute?
+      // maybe b/c need data-row and data-col for indexing?
       cell.style.gridRow = row;
       cell.style.gridColumn = column;
       cell.setAttribute('data-row', row);
@@ -356,32 +374,35 @@ function createGrid_Test(id) {
 }
 
 // add css classes to grid + add day labels
-function updateGridLabels(date, isDaytime, generatedAt, grid) {
-  let firstDate = new Date(date);
+function updateGridLabels(grid, date, isDaytime, generatedAt, timeZone) {
+  let firstDate = DateTime.fromISO(date, { zone: timeZone});
+  console.log(`upgrade grid label, first date: ${firstDate.toString()}`);
   let firstIsDaytime = isDaytime;
-  let generatedDate = new Date(generatedAt);
-  grid.setAttribute('data-date', firstDate.toISOString());
+  let generatedDate = DateTime.fromISO(generatedAt, {zone: timeZone});
+  grid.setAttribute('data-date', firstDate.toString());
   grid.setAttribute('data-isdaytime', firstIsDaytime);
-  grid.setAttribute('data-generated', generatedDate.toISOString());
+  grid.setAttribute('data-generated', generatedDate.toString());
+  grid.setAttribute('data-timezone', timeZone);
   for(let i=0; i<grid.children.length; i++) {
-    cell = grid.children[i];
+    let cell = grid.children[i];
     if (i == 0) {
       cell.classList.add('grid-label');
     }
-    // setting grid column lbels
-    else if(i < 28) {
+    // setting grid column labels
+    else if(i < 27) {
       cell.classList.add('grid-label');
-      cell.textContent = `${firstDate.toDateString()} ${firstIsDaytime ? 'day' : 'night'}`;
+      cell.textContent = `${firstDate.weekdayShort} ${firstDate.toFormat('MM-dd-yyyy')} ${firstIsDaytime ? 'day' : 'night'}`;
+      
       if(!firstIsDaytime) {
-        firstDate.setDate(firstDate.getDate() + 1);
+        firstDate = firstDate.plus({ days: 1 });
       }
       firstIsDaytime = !firstIsDaytime;
     }
     // setting grid row labels
-    else if ((i % 28) == 0) {
+    else if ((i % 27) == 0) {
       cell.classList.add('grid-label');
-      cell.textContent = generatedDate.toDateString();
-      generatedDate.setDate(generatedDate.getDate() + 1);
+      cell.textContent = `${generatedDate.weekdayShort} ${generatedDate.toFormat('MM-dd-yyyy')}`;
+      generatedDate = generatedDate.plus({ days: 1});
     }
     else {
       cell.classList.add('forecast-cell');
@@ -403,76 +424,8 @@ i.e. how many times 12am is crossed
 
 */
 function getRow(gridDate, targetDate) {
-  if (gridDate > targetDate) {
-    return -1;
-  }
   let diff = dayDiff(gridDate, targetDate);
   return diff;
-}
-
-function dayDiff(firstDate, secondDate) {
-  let date1 = new Date(firstDate);
-  let date2 = new Date(secondDate);
-
-  let standard1 = new Date(`${date1.getMonth()+1} ${date1.getDate()}, ${date1.getFullYear()}`);
-  let standard2 = new Date(`${date2.getMonth()+1} ${date2.getDate()}, ${date2.getFullYear()}`);
-  const msPerDay = (24*60*60*1000);
-  return (standard2 - standard1)/msPerDay;
-}
-
-/*
-have first date, first isDaytime, and when first forecast generated at
-given a forecast (date + isDaytime), calculate how many half days between it and the grid's first forecast
-
-maybe just use day diff and then some minor is daytime math?
-so if start is day, end is night; then has to be +1?
-start is night, end is day; then has to be +1?  
-
-
-1/1 night, 1/2 day => 1 half day; date diff 1
-1/1 night, 1/3 day => 3 half days; date diff 2
-1/1 night, 1/4 day => 5 half days; date diff 3
-
-so 2*(dateDiff)-1 is the trick
-
-===========
-
-1/1 day, 1/1 night => 1 half day; date diff: 0
-1/1 day, 1/2 night => 3 half day; date diff: 1
-1/1 day, 1/3 night => 5 half day; date diff: 2
-1/1 day, 1/4 night => 7 half day; date diff: 3
-
-base edge case is a bit different (subtle)
-
-
-
-*/
-
-// NOTE: not sure if dates here are handled as strings or actual date objects?
-function halfDaysBetween(startDate, startIsDaytime, targetDate, targetIsDaytime) {
-  if (startDate > targetDate) {
-    return -1;
-  }
-  let daysBetween = dayDiff(startDate, targetDate);
-  if(startIsDaytime && !targetIsDaytime) {
-    if(daysBetween === 0) {
-      return 1;
-    }
-    else {
-      return 2*daysBetween - 1
-    }
-  } 
-  else if (!startIsDaytime && targetIsDaytime) {
-    return 2*daysBetween - 1;
-  }
-  return daysBetween*2;
-}
-
-/*
-helper function for doing date arithmetic
-*/
-function addNDays(date, n) {
-
 }
 
 /*
@@ -480,12 +433,19 @@ given a grid and a date + isdaytime, returns row and column id's for date+isdayt
 maybe have to handle off by one error b/c html grid is 1-indexed
 */
 function forecastGridCoordinates(grid, date, isDaytime, generated) {
-  let gridFirstDate = grid.getAttribute('data-date');
+  // NOTE: need include time zone here or else gets interpreted as local timezone
+  let gridFirstDate = DateTime.fromISO(grid.getAttribute('data-date'), { zone: grid.getAttribute('data-timezone')});
   let gridFirstIsDaytime = grid.getAttribute('data-isdaytime')  === 'true';
-  let gridGenerated = grid.getAttribute('data-generated');
+  let gridGenerated = DateTime.fromISO(grid.getAttribute('data-generated'), {zone: grid.getAttribute('data-timezone')});
+
+  console.log(`gridFirstDate: ${gridFirstDate}, gridGenerated: ${gridGenerated}`);
+  // up until now dealing with date strings, here is where they are converted
+
 
   let row = getRow(gridGenerated, generated);
   let column = halfDaysBetween(gridFirstDate, gridFirstIsDaytime, date, isDaytime);
+
+  console.log(`generated: ${generated}, row: ${row+2}, column: ${column+2}`);
 
   // include error checking?
   return [row, column];
@@ -509,6 +469,7 @@ function createForecastCell(row, column, forecastJson) {
   cell.classList.add('forecast-cell');
   // NOTE: why update both style and data attribute?
   // also maybe this code is duplicate ...?
+  // need data-row and data-col for quick indexing?
   cell.style.gridRow = row;
   cell.style.gridColumn = column;
   cell.setAttribute('data-row', row);
@@ -556,9 +517,12 @@ function updateForecastCell(id, row, column, forecastJson) {
   cell.appendChild(wind);
   cell.appendChild(precip);
   cell.style.backgroundColor = "Aquamarine";
-  cell.setAttribute('title', forecastJson['description']);
+  // NOTE: changing description temporarily so can help debug row, column mapping
+  // cell.setAttribute('title', forecastJson['description']);
+  cell.setAttribute('title', `row: ${row}, column: ${column}`);
   return cell;
 
+  // not sure what this is for?
   oldCell.innerHTML = newCell.getHTML();
 }
 
@@ -570,17 +534,29 @@ update cell
 */
 function addForecastToGrid_Test(id, forecast) {
   let grid = document.getElementById(`forecast-${id}`);
-  let date = forecast['date'];
-  let isDaytime = forecast['is_daytime'];
-  let generated = forecast['generated_at'];
+  let date = DateTime.fromISO(forecast['date'], { zone: forecast['time_zone']});
+  // this is boolean b/c returned by JSON
+  let isDaytime = forecast['is_daytime']
+  let generated = DateTime.fromISO(forecast['generated_at'], { zone: forecast['time_zone']});
+
+
 
   let coordinates = forecastGridCoordinates(grid, date, isDaytime, generated);
   // include error checking here?
   let row = coordinates[0];
   let column = coordinates[1];
-  if (row < 0 || row > 8 || column < 0 || column > 28) {
-    throw new Error(`invalid grid coordinate. row: ${row}, col: ${column}`);
+  // NOTE: not sure this error-checking works?
+  // either row or column is invalid, so comparing A to B and A comes after B
+  if (row < 0 || column < 0) {
+    throw new Error(`invalid grid coordinate. row: ${row}, col: ${column}, id: ${id}, gen: ${generated}, date: ${date}, ${isDaytime}`);
   }
+  // trying to add a forecast that doesn't fit on current grid
+  if (row+2 > 8 || column+2 > 28) {
+    console.log(`invalid grid coordinate. row: ${row}, col: ${column}, id: ${id}, gen: ${generated}, date: ${date}, ${isDaytime}`);
+    return;
+  }
+
+  // NOTE: why is there a +2 here for each row and column id? because css grid is 1-indexed and first row and first column are for headers
   updateForecastCell(id, row+2, column+2, forecast);
 }
 
@@ -747,6 +723,7 @@ what's the difference between firstDate and firstGeneratedDate?
 function addForecastToGrid(id, forecastJson) {
   let grid = document.getElementById(`forecast-${id}`);
   let firstDate = new Date(grid.getAttribute('data-first-date'));
+  // need to add check here b/c data abbtributes are string by default
   let firstIsDaytime = grid.getAttribute('data-first-isdaytime') === 'true';
   let firstGeneratedDate = new Date(grid.getAttribute('data-first-generated-at'));
 
@@ -996,6 +973,11 @@ function setupEventHandlers() {
       let grid = row.querySelector(".content");
       grid.style.display = "block";
     });
+
+    let collapsibles = document.querySelectorAll(".collapsible");
+    collapsibles.forEach(button => {
+      button.textContent = '-';
+    })
   });
   
   let collapseAll = document.getElementById('collapse');
@@ -1005,6 +987,10 @@ function setupEventHandlers() {
       let grid = row.querySelector(".content");
       grid.style.display = "none";
     });
+    let collapsibles = document.querySelectorAll(".collapsible");
+    collapsibles.forEach(button => {
+      button.textContent = '+';
+    })
   });
 
   let mapViews = document.querySelectorAll('.coordinate');
@@ -1023,10 +1009,11 @@ function setupEventHandlers() {
     //   .openOn(map);
   }));
 
-  collapsibles = document.querySelectorAll(".collapsible");
+  let collapsibles = document.querySelectorAll(".collapsible");
   collapsibles.forEach((button) => button.addEventListener('click', (e) => {
     // this.classList.toggle("active");
 
+    button.textContent = button.textContent === '+' ? '-' : '+';
     // NOTE: add better error-checking, encode id in each element?
     let pk = button.parentElement.id;
     var content = document.getElementById(`forecast-${pk}`);
@@ -1034,7 +1021,7 @@ function setupEventHandlers() {
   }));
 
   let csrftoken = getCookie('csrftoken');
-  removeButtons = document.querySelectorAll(".remove");
+  let removeButtons = document.querySelectorAll(".remove");
   removeButtons.forEach((button) => button.addEventListener('click', (e) => {
     let pk = button.parentElement.id;
     if (confirm("Are you sure you want to delete a coordinate?")) {
@@ -1109,6 +1096,7 @@ async function asyncFunction() {
 asyncFunction().then(() => {
   console.log("enter async function");
   mapLog.forEach((i) => console.log(i));
+  runGridTests();
 });
 
 // let asyncFoo = new Promise((resolve, reject) => {
@@ -1119,3 +1107,33 @@ asyncFunction().then(() => {
 //   console.log("enter async function");
 //   mapLog.forEach((i) => console.log(i));
 // })
+
+/*
+do some basic math
+for each coordinate:
+return which rows didn't have 14 forecasts
+return how many forecasts in a grid
+
+*/
+function runGridTests() {
+  let weatherGrids = document.querySelectorAll('.forecast-grid');
+  weatherGrids.forEach((g) => {
+    let id = g.id.split('-')[1];
+    console.log(`--- running tests for grid id: ${id} ---`);
+    let totalForecastsInGrid = 0;
+    for(let i=2; i<9; i++) {
+      let forecastsInRow = 0;
+      for(let j=2; j<28; j++) {
+        let cell = getGridItem(id, i, j);
+        if(cell.style.backgroundColor === 'aquamarine') {
+          forecastsInRow += 1;
+        }
+      }
+      if(forecastsInRow != 14) {
+        console.log(`incomplete set of forecasts in row ${i}: ${forecastsInRow} forecasts`);
+      }
+      totalForecastsInGrid += forecastsInRow;
+    }
+    console.log(`total forecasts in grid: ${totalForecastsInGrid}`);
+  })
+}

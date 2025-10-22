@@ -147,7 +147,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 CELERY_BEAT_SCHEDULE = {
     "fetch-weather-every-midnight": {
-        "task": "weather.tasks.fetch_weather",
+        "task": "weather.tasks.fetch_weather_all",
         "schedule": crontab(hour=9, minute=0),
     },
 }
@@ -156,4 +156,6 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 # leading slash required for redirect to a path appended to domain root
 # otherwise redirected to path appended to the current url, i.e. relative path
 LOGIN_REDIRECT_URL = "/map"
+LOGIN_URL = "login"
+LOGOUT_URL = "logout"
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
