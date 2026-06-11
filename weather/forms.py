@@ -23,3 +23,8 @@ class UserEditForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ["username", "first_name", "email"]
+
+
+class LoginForm(forms.Form):
+    username = forms.CharField()
+    password = forms.CharField(widget=forms.PasswordInput)

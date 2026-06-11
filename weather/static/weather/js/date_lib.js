@@ -1,20 +1,19 @@
 import { DateTime }  from "../vendored/luxon_3.6.1.js";
 
-// assumptions ... accepts DateTime objects
-// what does this function do?
+/**
+ * Calculates day difference between two JS DateTime objects
+ * @param {*} start 
+ * @param {*} end 
+ * @returns integer
+ */
 export function dayDiff(start, end) {
   if (start > end) {
     return -1;
   }
-  
-  // this is the main issue here ... need to calculate day diff based on specific time zone and not utc
-  // let standard1 = new Date(Date.UTC(date1.getUTCFullYear(), date1.getUTCMonth(), date1.getUTCDate()));
-  // let standard2 = new Date(Date.UTC(date2.getUTCFullYear(), date2.getUTCMonth(), date2.getUTCDate()));
-
-  let standard1 = DateTime.fromObject({ year: start.year, month: start.month, day: start.day}, { zone: start.zoneName });
-  let standard2 = DateTime.fromObject({ year: end.year, month: end.month, day: end.day}, { zone: end.zoneName });
-  const msPerDay = (24*60*60*1000);
-  return (standard2 - standard1)/msPerDay;
+  let first = DateTime.fromObject({ year: start.year, month: start.month, day: start.day}, { zone: start.zoneName });
+  let second = DateTime.fromObject({ year: end.year, month: end.month, day: end.day}, { zone: end.zoneName });
+  let diff = second.diff(first, 'days').toObject();
+  return diff['days'];
 }
 
 /*
@@ -50,6 +49,7 @@ so 2*(dayDiff)+1 is the trick?
 
 // NOTE: assumption that parameters are DateTime objects
 // TO-DO: should return -1 or throw an error?
+// NOTE: why even have this function? isn't this a duplicate from the next function?
 export function halfDaysBetween(startDate, startIsDaytime, targetDate, targetIsDaytime) {
   console.log(`startDate: ${startDate}, startIsDaytime: ${startIsDaytime}, targetDate: ${targetDate}, targetIsDaytime: ${targetIsDaytime}`);
   let daysBetween = dayDiff(startDate, targetDate);
@@ -91,6 +91,13 @@ sanity check, if startdate is later than targetdate, return -1
 else get 
 
 */
+
+/**
+ * returns the ceiling # of half days between two moment DateTime objects
+ * @param {*} startDate moment DateTime object
+ * @param {*} endDate moment DateTime object
+ * @returns 
+ */
 export function halfDaysBetweenOnlyDateTimes(startDate, endDate) {
   if (startDate > endDate) {
     return -1;
@@ -103,7 +110,9 @@ export function halfDaysBetweenOnlyDateTimes(startDate, endDate) {
   }
   let halfDays = 0;
   let nextPeriodEnd = getEndOfFirstPeriod(startDate);
-  while(nextPeriodEnd < endDate) {
+  // the equal part of the comparison is important to prevent off by one error
+  // the key idea being that trying to get ceiling # of half days, not floor
+  while(nextPeriodEnd <= endDate) {
     nextPeriodEnd = nextPeriodEnd.plus({days: 0.5});
     halfDays += 1;
   }
@@ -112,6 +121,11 @@ export function halfDaysBetweenOnlyDateTimes(startDate, endDate) {
 
 // if hour is ... 18-23 or 0-5 then 6:00 is the next time
 // if hour is 6-17 then 18:00 is the end of the next time
+/**
+ * 
+ * @param {*} dt 
+ * @returns 
+ */
 export function getEndOfFirstPeriod(dt) {
   let hour = dt.hour;
   // make a copy?

@@ -45,7 +45,7 @@ class Forecast(models.Model):
     date = models.DateTimeField()
     time_zone = models.CharField(max_length=40, default="America/Los_Angeles")
     is_daytime = models.BooleanField()
-    temperature = models.IntegerField()
+    temperature = models.IntegerField(null=True)
     wind_speed = models.CharField(max_length=20)
     wind_direction = models.CharField(max_length=5)
     precip_chance = models.IntegerField(null=True)

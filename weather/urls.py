@@ -12,6 +12,7 @@ from .views import (
     register,
     edit,
     dashboard,
+    user_login,
 )
 
 urlpatterns = [
@@ -23,6 +24,7 @@ urlpatterns = [
     path("get_coordinates/", get_coordinates, name="get_coordinates"),
     path("get_forecasts/<int:pk>/", get_forecasts, name="get_forecasts"),
     path("peaks/", get_peaks, name="get_peaks"),
+    path("account/login/", user_login, name="login"),
     path("account/", include("django.contrib.auth.urls")),
     path("register/", register, name="register"),
     path("edit/", edit, name="edit"),

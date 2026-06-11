@@ -419,3 +419,21 @@ test('halfDaysBetweenOnlyDateTimes, d1 night + d2 night, across month; fourteen 
   let targetDate = DateTime.fromISO('2025-04-03T21:00:00.000', { zone: 'utc'});
   expect(halfDaysBetweenOnlyDateTimes(startDate, targetDate)).toBe(14);
 })
+
+test('halfDaysBetweenOnlyDateTimes, d1 day + d2 day, across month + DST boundary (error in testing); ten half days', () => {
+  let startDate = DateTime.fromISO('2025-10-29T16:00:00.000-07:00', { zone: 'America/Los_Angeles'});
+  let targetDate = DateTime.fromISO('2025-11-03T06:00:00.000-08:00', { zone: 'America/Los_Angeles'});
+  expect(halfDaysBetweenOnlyDateTimes(startDate, targetDate)).toBe(10);
+})
+
+test('halfDaysBetween, d1 day + d2 day, across month + DST boundary (error in testing); ten half days', () => {
+  let startDate = DateTime.fromISO('2025-10-29T16:00:00.000-07:00', { zone: 'America/Los_Angeles'});
+  let targetDate = DateTime.fromISO('2025-11-03T06:00:00.000-08:00', { zone: 'America/Los_Angeles'});
+  expect(halfDaysBetween(startDate, true, targetDate, true)).toBe(10);
+})
+
+test('halfDaysBetweenOnlyDateTimes, d2 an hour after d1 (error in testing); should be 1 half days', () => {
+  let startDate = DateTime.fromISO('2025-10-29T16:00:00.000-07:00', { zone: 'America/Los_Angeles'});
+  let targetDate = DateTime.fromISO('2025-10-29T18:00:00.000-07:00', { zone: 'America/Los_Angeles'});
+  expect(halfDaysBetweenOnlyDateTimes(startDate, targetDate)).toBe(1);
+})

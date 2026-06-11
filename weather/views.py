@@ -15,6 +15,10 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from weather_app.config import CONTACT_EMAIL
 from django.contrib.auth.forms import UserCreationForm
 from .forms import UserRegistrationForm, UserEditForm
+from django.contrib.auth import authenticate, login
+from .forms import LoginForm
+from django.http import HttpResponse
+import pdb
 
 
 # NOTE: why need this decorator?
@@ -54,6 +58,55 @@ def map_view(request):
     return render(request, "weather/map.html", context=context)
 
 
+def user_login(request):
+    if request.method == "POST":
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            user = authenticate(
+                request, username=cd["username"], password=cd["password"]
+            )
+            if user is not None:
+                if user.is_active:
+                    # get old session hash before login
+                    # find all the coordinates associated with this session id
+                    # add coordinate if coordinate not already in user's list
+                    session_key = request.session.session_key
+                    pdb.set_trace()
+                    login(request, user)
+                    print("old session key: ")
+                    print(session_key)
+
+                    session_coordinates = Coordinate.objects.filter(
+                        session_key=session_key
+                    )
+
+                    print("session_coordinates: ")
+                    print(session_coordinates)
+
+                    pdb.set_trace()
+                    for coord in session_coordinates:
+                        exists = Coordinate.objects.filter(
+                            user__username=user,
+                            latitude=coord.latitude,
+                            longitude=coord.longitude,
+                        )
+                        if not exists:
+                            pdb.set_trace()
+                            coord.user = user
+                            coord.session_key = None
+                            coord.save(update_fields=["user", "session_key"])
+
+                    return redirect("map")
+                else:
+                    return HttpResponse("Disabled account")
+            else:
+                return HttpResponse("Invalid login")
+    else:
+        form = LoginForm()
+    return render(request, "registration/login.html", {"form": form})
+
+
 @require_POST
 def add_coordinate(request):
     try:
@@ -67,7 +120,7 @@ def add_coordinate(request):
                 latitude=lat, longitude=lng, user=request.user
             )
             # say can't add duplicate coordinates? or handle it at the db level?
-            coordinates = Coordinate.objects.filter(user=request.user)
+            # coordinates = Coordinate.objects.filter(user=request.user)
         else:
             session_key = request.session.session_key
             if not session_key:
@@ -91,7 +144,7 @@ def add_coordinate(request):
         else:
             return JsonResponse(
                 {
-                    "error:": "cannot create duplicate coordinate entry",
+                    "error:": "Cannot create duplicate coordinate entry",
                 },
                 status=409,
             )

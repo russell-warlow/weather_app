@@ -1,5 +1,5 @@
 import { DateTime }  from "../vendored/luxon_3.6.1.js";
-import { dayDiff, halfDaysBetween } from './date_lib.js';
+import { dayDiff, halfDaysBetween, halfDaysBetweenOnlyDateTimes } from './date_lib.js';
 
 // const { DateTime } = require("luxon");
 
@@ -376,9 +376,9 @@ function createGrid_Test(id) {
 // add css classes to grid + add day labels
 function updateGridLabels(grid, date, isDaytime, generatedAt, timeZone) {
   let firstDate = DateTime.fromISO(date, { zone: timeZone});
-  console.log(`upgrade grid label, first date: ${firstDate.toString()}`);
   let firstIsDaytime = isDaytime;
   let generatedDate = DateTime.fromISO(generatedAt, {zone: timeZone});
+  console.log(`update grid label, first date: ${firstDate.toString()}, generatedDate: ${generatedDate.toString()}`);
   grid.setAttribute('data-date', firstDate.toString());
   grid.setAttribute('data-isdaytime', firstIsDaytime);
   grid.setAttribute('data-generated', generatedDate.toString());
@@ -438,14 +438,14 @@ function forecastGridCoordinates(grid, date, isDaytime, generated) {
   let gridFirstIsDaytime = grid.getAttribute('data-isdaytime')  === 'true';
   let gridGenerated = DateTime.fromISO(grid.getAttribute('data-generated'), {zone: grid.getAttribute('data-timezone')});
 
-  console.log(`gridFirstDate: ${gridFirstDate}, gridGenerated: ${gridGenerated}`);
   // up until now dealing with date strings, here is where they are converted
 
 
   let row = getRow(gridGenerated, generated);
-  let column = halfDaysBetween(gridFirstDate, gridFirstIsDaytime, date, isDaytime);
+  // let column = halfDaysBetween(gridFirstDate, gridFirstIsDaytime, date, isDaytime);
+  let column = halfDaysBetweenOnlyDateTimes(gridFirstDate, date);
 
-  console.log(`generated: ${generated}, row: ${row+2}, column: ${column+2}`);
+  console.log(`targetDate: ${date}, row: ${row+2}, column: ${column+2}`);
 
   // include error checking?
   return [row, column];
