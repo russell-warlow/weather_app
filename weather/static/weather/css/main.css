@@ -88,10 +88,15 @@
 }
 
 .collapsible {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   background-color: #eee;
   cursor: pointer;
   border: 1px solid;
   font-size: 14px;
+  width: 1.5em;
 }
 
 .content {
@@ -100,7 +105,8 @@
 
 .header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 2px;
 }
 
 .accounts {
@@ -112,16 +118,15 @@
   background: none; 
   border: none; 
   color: #007bff; 
-  text-decoration: underline; 
+  /* text-decoration: underline;  */
   cursor: pointer; 
   padding: 0; 
   font-size: 1em;
 }
 
 .progress-bar {
-  /* somehow not used or overriden ... ?
-  width: 100px; */
-
+  /* somehow not used or overriden ... ? */
+  width: 30em;
   height: .25em;
   background-color: lightskyblue;
   border-radius: 1.5em;
@@ -140,4 +145,23 @@
   display: flex;
   align-items: center;
   width: 150px;
+}
+
+.remove {
+  display: flex;
+  align-items: center; 
+  justify-content: center; 
+  text-align: center;
+  width: 1.5em;
+}
+
+/* aligning django generated form fields */
+label[for="id_username"],
+label[for="id_first_name"],
+label[for="id_email"],
+label[for="id_password"],
+label[for="id_password2"]
+{
+  display: inline-flex;
+  width: 7.5em;
 }

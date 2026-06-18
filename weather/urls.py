@@ -16,7 +16,7 @@ from .views import (
 )
 
 urlpatterns = [
-    path("map/", map_view, name="map"),
+    path("", map_view, name="map"),
     path("add_coordinate/", add_coordinate, name="add_coordinate"),
     path("add_forecast/", add_forecast, name="add_forecast"),
     path("search/", search, name="search"),

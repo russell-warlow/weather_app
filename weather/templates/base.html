@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NOTE: this needs to be updated later -->
+{% load static %}
 <html lang="en">
   <head>
     <meta name="keywords" />
@@ -10,29 +10,24 @@
     </title>
     {% block extra_head %}
     {% endblock extra_head %}
+    <link rel="stylesheet"
+          type="text/css"
+          href="{% static 'weather/css/main.css' %}">
   </head>
   <body>
-    <div id="header">
-      <span class="user">
-        {% if request.user.is_authenticated %}
-          Hello {{ request.user.first_name|default:request.user.username }}!
-          <a href="{% url 'dashboard' %}">Dashboard</a>
-          <form method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button type="submit">Logout</button>
-          </form>
-        {% else %}
-          <a href="{% url "login" %}">Log-in</a>
-        {% endif %}
-      </span>
-    </div>
-    {% if not request.user.is_authenticated %}
-      {% if coordinates|length > 0 %}
-        <div class="alert">
-          You must <a href="{% url 'login' %}">log in</a> to save your changes.
-        </div>
+    <div class="header">
+      {% if request.user.is_authenticated %}
+        Hello {{ request.user.first_name|default:request.user.username }}!
+        <a href="{% url 'dashboard' %}">Dashboard</a>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit">Logout</button>
+        </form>
+      {% else %}
+        <a href="{% url "login" %}">Log-in</a>
+        <a href="{% url "map" %}">Home</a>
       {% endif %}
-    {% endif %}
+    </div>
     <div id="content">
       {% block content %}
       {% endblock content %}

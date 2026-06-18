@@ -953,6 +953,23 @@ function setupSearchBar() {
       option.addEventListener('click', () => {
         searchInput.value = option.textContent.trim();
         optionsContainer.style.display = 'none';
+
+        let query = option.textContent.trim();
+        fetch(`/search/?q=${encodeURIComponent(query)}`)
+          .then(response => response.json())
+          .then(data => {
+            if(data.latitude && data.longitude) {
+              map.setView([data.latitude, data.longitude], zoomLevel);
+              L.marker([data.latitude, data.longitude]).addTo(map)
+            }
+            else {
+              alert('Location not found!')
+            }
+          })
+          .catch(error => {
+            alert (`Cannot parse: ${query}`);
+          })
+
       })
     });
 

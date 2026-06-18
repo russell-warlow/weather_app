@@ -24,26 +24,17 @@ import pdb
 # NOTE: why need this decorator?
 @ensure_csrf_cookie
 def map_view(request):
-    # records = Coordinate.objects.all()
-    # coordinates = [
-    #     {"latitude": i.latitude, "longitude": i.longitude, "pk": i.pk}
-    #     for i in records
-    # ]
     coordinates = {}
-    # maybe check if user is logged in, if so then pull from that
-    # if not then pull from session?
     if request.user.is_authenticated:
-        # preserve order?
         coordinates = Coordinate.objects.filter(user=request.user).order_by(
             "date_created"
         )
     else:
-        # how pull from session?
-        # maybe update the session key in add_coordinate
-        coordinates = Coordinate.objects.filter(
-            session_key=request.session.session_key
-        ).order_by("date_created")
-
+        session_key = request.session.session_key
+        if session_key is not None:
+            coordinates = Coordinate.objects.filter(
+                session_key=request.session.session_key
+            ).order_by("date_created")
     context = {
         "coordinates": [
             {
@@ -72,31 +63,21 @@ def user_login(request):
                     # find all the coordinates associated with this session id
                     # add coordinate if coordinate not already in user's list
                     session_key = request.session.session_key
-                    pdb.set_trace()
                     login(request, user)
-                    print("old session key: ")
-                    print(session_key)
-
-                    session_coordinates = Coordinate.objects.filter(
-                        session_key=session_key
-                    )
-
-                    print("session_coordinates: ")
-                    print(session_coordinates)
-
-                    pdb.set_trace()
-                    for coord in session_coordinates:
-                        exists = Coordinate.objects.filter(
-                            user__username=user,
-                            latitude=coord.latitude,
-                            longitude=coord.longitude,
+                    if session_key is not None:
+                        session_coordinates = Coordinate.objects.filter(
+                            session_key=session_key
                         )
-                        if not exists:
-                            pdb.set_trace()
-                            coord.user = user
-                            coord.session_key = None
-                            coord.save(update_fields=["user", "session_key"])
-
+                        for coord in session_coordinates:
+                            exists = Coordinate.objects.filter(
+                                user__username=user,
+                                latitude=coord.latitude,
+                                longitude=coord.longitude,
+                            )
+                            if not exists:
+                                coord.user = user
+                                coord.session_key = None
+                                coord.save(update_fields=["user", "session_key"])
                     return redirect("map")
                 else:
                     return HttpResponse("Disabled account")
